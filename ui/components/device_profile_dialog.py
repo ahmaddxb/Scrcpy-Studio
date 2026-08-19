@@ -167,10 +167,15 @@ class DeviceProfileDialog(QDialog):
         main_layout.addLayout(btn_row)
 
     def _load_values(self):
-        # Load Alias
+        # Load Alias: Check custom alias first, fallback to device display_name or clean model
         alias = self.config.get_device_alias(self.serial, fallback="")
-        if not alias and self.device:
-            alias = self.device.model or self.serial
+        if not alias or alias == self.serial:
+            if self.device:
+                alias = self.device.display_name
+                if not alias or alias == "Unknown" or alias == self.serial:
+                    alias = self.device.model.replace("_", " ") if (self.device.model and self.device.model != "Unknown") else ""
+            else:
+                alias = ""
         self.edit_alias.setText(alias)
 
         # Load Preferred Preset
@@ -191,8 +196,12 @@ class DeviceProfileDialog(QDialog):
 
     def _save_profile(self):
         alias = self.edit_alias.text().strip()
-        if not alias:
-            alias = self.serial
+        # If user leaves empty or puts raw serial, fallback to hardware display name
+        if not alias or alias == self.serial:
+            if self.device and self.device.display_name and self.device.display_name != self.serial:
+                alias = self.device.display_name
+            else:
+                alias = self.serial
 
         preferred_preset = self.combo_preset.currentData()
         display_res = self.combo_display.currentData()

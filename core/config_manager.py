@@ -216,15 +216,16 @@ class ConfigManager:
 
     def pin_device(self, serial: str, name: str = "", is_wireless: bool = False) -> None:
         pinned = self.get_pinned_devices()
+        clean_name = name.strip() if (name and name.strip() != serial) else serial
         for p in pinned:
             if p.get("serial") == serial:
-                if name:
-                    p["name"] = name
+                if clean_name != serial or not p.get("name"):
+                    p["name"] = clean_name
                 self.save()
                 return
         pinned.append({
             "serial": serial,
-            "name": name or serial,
+            "name": clean_name,
             "is_wireless": is_wireless
         })
         self.data["pinned_devices"] = pinned
@@ -260,29 +261,37 @@ class ConfigManager:
         self.save()
 
     def get_device_alias(self, serial: str, fallback: str = "") -> str:
-        """Get custom friendly alias for a device if set, else fallback."""
+        """Get custom friendly alias for a device if set, else fallback to model / display name."""
+        if not serial:
+            return fallback or ""
         profile = self.get_device_profile(serial)
         alias = profile.get("alias", "").strip()
-        if alias:
+        if alias and alias != serial:
             return alias
         # Also check pinned_devices
         for p in self.get_pinned_devices():
-            if p.get("serial") == serial and p.get("name"):
-                return p["name"]
+            if p.get("serial") == serial:
+                p_name = p.get("name", "").strip()
+                if p_name and p_name != serial:
+                    return p_name
         return fallback or serial
 
     def set_device_alias(self, serial: str, alias: str) -> None:
         """Set a friendly name/alias for a device."""
         if not serial:
             return
+        clean_alias = alias.strip()
         profile = self.get_device_profile(serial)
-        profile["alias"] = alias.strip()
+        if clean_alias and clean_alias != serial:
+            profile["alias"] = clean_alias
+        elif "alias" in profile:
+            del profile["alias"]
         self.save_device_profile(serial, profile)
         # Also update pinned devices if pinned
         pinned = self.get_pinned_devices()
         for p in pinned:
             if p.get("serial") == serial:
-                p["name"] = alias.strip() or serial
+                p["name"] = clean_alias or serial
                 self.data["pinned_devices"] = pinned
                 self.save()
                 break
