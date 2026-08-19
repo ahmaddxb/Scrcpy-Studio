@@ -23,6 +23,7 @@ config.json
 
 # Gemini / Antigravity workspace files
 .gemini/
+AGENTS.md
 
 # IDE / Editor settings
 .vscode/
