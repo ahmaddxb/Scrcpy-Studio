@@ -12,33 +12,41 @@
 
 ## ✨ Features & Highlights
 
-### 🪟 1. Independent Virtual Displays & PC Window Geometry
+### 🔀 1. Universal 1-Click "Move to PC" Live App Migration
+* **Bypass Virtual Display Authentication Barriers**: Log in to banking or biometric-protected apps on your physical phone, then click **`🔀 Move to PC`** to instantly migrate the active authenticated task into a standalone PC Virtual Display window without restarting or re-authenticating.
+* **Auto-Detect Focused App**: Zero configuration required—Scrcpy Studio automatically inspects the phone's physical screen (Display 0), resolves the running activity, and routes it to your PC.
+* **Smart Multi-Window Isolation**: Each transferred app automatically claims its own dedicated Virtual Display window (`#180`, `#181`, `#182`) side-by-side on your desktop without collisions.
+
+### 🪟 2. Independent Virtual Displays & PC Window Geometry
 * **Dedicated Standalone Windows**: Launch any installed Android app in an independent virtual display window (`--new-display=...`) with custom PC window dimensions (`--window-width`, `--window-height`) without interrupting the physical phone screen.
 * **Resolution & DPI Presets**: Pre-configured and customizable display profiles (`1080x2316/420`, `1080x1920`, `1920x1080 DeX`, etc.).
 
-### ⭐ 2. Favorite Apps Dock & Live Icon Extraction
+### ⭐ 3. Favorite Apps Dock & Live Icon Extraction
 * **Authentic App Logos**: Dual-engine extractor pulls launcher icons directly from device APKs via ADB (`exec-out unzip`) with HD Google Play Store metadata fallback.
 * **Batch ADB Scraper**: Multi-threaded parallel icon scraper extracts all installed app icons in seconds without installing any helper APKs on the phone.
 * **Provenances & Tooltips**: Inspect exact icon origins (`📱 Device APK` vs `🌐 Online HD`) and force re-extraction anytime.
 
-### 🔔 3. Windows System Tray & Desktop Shortcuts
+### 💡 4. Native Scrcpy Screen Power Controls
+* **Live Display Mode Control**: Turn off your phone's physical display via native Scrcpy live shortcuts (<kbd>Alt</kbd> + <kbd>O</kbd> / `POWER_MODE_OFF`) so nobody can see your phone screen while you continue mirroring and multitasking from PC.
+* **Wake On Demand**: Instantly restore the physical screen (<kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>O</kbd>) directly from the Quick Actions dock.
+
+### 🌐 5. Intelligent Network & Device Detection
+* **Real Network Interface Inspection**: Accurately differentiates between **`🌐 LAN`** (Wired Ethernet `eth0`, e.g. Android TV), **`📶 WiFi`** (`wlan0`), and **`🔌 USB`**.
+* **Subnet & mDNS Network Scanner**: High-speed parallel Wi-Fi discovery across 254 subnet IPs in < 1.5 seconds.
+* **Pinned Devices**: Pin frequently used USB/Wi-Fi devices with auto-reconnect on startup.
+
+### 🔔 6. Windows System Tray & Desktop Shortcuts
 * **Taskbar System Tray (`QSystemTrayIcon`)**: Minimizes to tray on close/minimize with background execution.
-* **Tray Quick-Launch**: Right-click the system tray icon to 1-click launch favorite apps directly into standalone virtual display windows.
+* **Tray Quick-Launch**: Right-click the system tray icon to 1-click launch favorite apps directly into standalone virtual display windows without opening the main window.
 * **1-Click Desktop Shortcuts (`.lnk`)**: Automatically converts app logos to `.ico` and creates desktop shortcuts on your Windows desktop.
 
-### 🔄 4. Scrcpy GitHub Auto-Downloader & Updater
+### 🔄 7. Scrcpy GitHub Auto-Downloader & Updater
 * **GitHub Release Integration**: Automatically checks for official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) 64-bit Windows releases.
 * **One-Click Deploy**: Downloads, extracts, unlocks, and updates the local binary runtime (`scrcpy/`) with a progress bar and changelog viewer.
 
-### 🔋 5. Screen Timeout Reference Counter & Safety
+### 🔋 8. Screen Timeout Reference Counter & Safety
 * **24-Hour Timeout Boost**: Automatically extends phone screen timeout during mirroring sessions to prevent unwanted sleep.
 * **Multi-Session Reference Counting**: Tracks all open virtual displays and safely restores your phone's original timeout when the last session closes.
-
-### 📶 6. Complete ADB & Device Toolkit
-* **Subnet & mDNS Network Scanner**: High-speed parallel Wi-Fi discovery across 254 subnet IPs in < 1.5 seconds.
-* **Pinned Devices**: Pin frequently used USB/Wi-Fi devices with auto-reconnect on startup.
-* **Drag-and-Drop**: Drop `.apk` files to install, or drop media files to push directly to `/sdcard/Download/`.
-* **Interactive Command Injector**: Navigation keys, volume, text input injection, and raw ADB shell console.
 
 ---
 
@@ -51,8 +59,8 @@
 ### 2. Quick Start
 ```bash
 # Clone the repository
-git clone https://github.com/YourUsername/Scrcpy-UI.git
-cd Scrcpy-UI
+git clone https://github.com/ahmaddxb/Scrcpy-Studio.git
+cd Scrcpy-Studio
 
 # Install Python dependencies
 pip install -r requirements.txt
@@ -61,6 +69,13 @@ pip install -r requirements.txt
 python app.py
 ```
 *Or simply double-click **`run.bat`**.*
+
+### 3. Build Standalone Portable Executable (`.exe`)
+To compile a single portable `.exe` bundle:
+```bash
+python scripts/build_exe.py
+```
+*Outputs a standalone **`dist/ScrcpyStudio.exe`** ready to run anywhere without Python installed.*
 
 ---
 
