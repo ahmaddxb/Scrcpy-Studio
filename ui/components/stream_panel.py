@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -33,6 +33,7 @@ class StreamPanel(QWidget):
     def __init__(self, config_manager: ConfigManager, parent=None):
         super().__init__(parent)
         self.config = config_manager
+        self.active_serial: Optional[str] = None
         self._block_signals = False
         self._setup_ui()
         self.load_presets_to_combo()
@@ -41,7 +42,26 @@ class StreamPanel(QWidget):
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(12)
+        main_layout.setSpacing(10)
+
+        # 0. Active Device Profile Header Banner
+        self.device_banner = QFrame()
+        self.device_banner.setStyleSheet("background-color: #141620; border: 1px solid #232734; border-radius: 6px; padding: 2px;")
+        d_layout = QHBoxLayout(self.device_banner)
+        d_layout.setContentsMargins(8, 4, 8, 4)
+        d_layout.setSpacing(8)
+
+        self.lbl_device_title = QLabel("📱 Device Profile: (None selected)")
+        self.lbl_device_title.setStyleSheet("color: #38BDF8; font-weight: bold; font-size: 11px;")
+        d_layout.addWidget(self.lbl_device_title, 1)
+
+        self.chk_device_custom = QCheckBox("Save Custom Settings for this Device")
+        self.chk_device_custom.setStyleSheet("color: #CBD5E1; font-size: 11px; font-weight: 500;")
+        self.chk_device_custom.toggled.connect(self._on_custom_profile_toggled)
+        d_layout.addWidget(self.chk_device_custom)
+
+        main_layout.addWidget(self.device_banner)
+        self.device_banner.setVisible(False)
 
         # 1. Preset Header Bar
         preset_bar = QHBoxLayout()
@@ -353,6 +373,33 @@ class StreamPanel(QWidget):
 
         main_layout.addLayout(bottom_row)
 
+    def set_active_device(self, serial: Optional[str], alias: str = ""):
+        """Switch stream panel settings to the active device profile."""
+        self.active_serial = serial
+        if not serial:
+            self.device_banner.setVisible(False)
+            self.load_settings(self.config.get("current_settings", {}))
+            return
+
+        self.device_banner.setVisible(True)
+        display_name = alias or self.config.get_device_alias(serial) or serial
+        self.lbl_device_title.setText(f"📱 Profile: {display_name}")
+
+        is_custom = self.config.is_device_custom_settings(serial)
+        self.chk_device_custom.blockSignals(True)
+        self.chk_device_custom.setChecked(is_custom)
+        self.chk_device_custom.blockSignals(False)
+
+        device_settings = self.config.get_device_settings(serial)
+        self.load_settings(device_settings)
+
+    def _on_custom_profile_toggled(self, checked: bool):
+        if self.active_serial:
+            self.config.set_device_custom_settings(self.active_serial, checked)
+            if checked:
+                self.config.set_device_settings(self.active_serial, self.get_settings())
+            self.settings_changed.emit()
+
     def _on_bitrate_slider_changed(self, val: int):
         self.lbl_bitrate_val.setText(f"{val} Mbps")
         self._on_setting_changed()
@@ -363,6 +410,13 @@ class StreamPanel(QWidget):
         is_custom_size = self.combo_resolution.currentText() == "Custom"
         self.lbl_custom_size.setVisible(is_custom_size)
         self.edit_custom_size.setVisible(is_custom_size)
+
+        cur_settings = self.get_settings()
+        if self.active_serial and self.chk_device_custom.isChecked():
+            self.config.set_device_settings(self.active_serial, cur_settings)
+        else:
+            self.config.set("current_settings", cur_settings)
+
         self.settings_changed.emit()
 
     def get_settings(self) -> Dict[str, Any]:

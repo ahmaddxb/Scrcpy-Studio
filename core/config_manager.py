@@ -238,6 +238,90 @@ class ConfigManager:
     def is_pinned(self, serial: str) -> bool:
         return any(p.get("serial") == serial for p in self.get_pinned_devices())
 
+    # === PER-CONNECTED DEVICE PROFILES ===
+
+    def get_device_profiles(self) -> Dict[str, Any]:
+        """Return the dictionary of all saved per-device profiles."""
+        return self.data.get("device_profiles", {})
+
+    def get_device_profile(self, serial: str) -> Dict[str, Any]:
+        """Return profile data for a specific device serial, or an empty dict."""
+        if not serial:
+            return {}
+        return self.get_device_profiles().get(serial, {})
+
+    def save_device_profile(self, serial: str, profile_data: Dict[str, Any]) -> None:
+        """Save or update profile dictionary for a specific device serial."""
+        if not serial:
+            return
+        if "device_profiles" not in self.data:
+            self.data["device_profiles"] = {}
+        self.data["device_profiles"][serial] = profile_data
+        self.save()
+
+    def get_device_alias(self, serial: str, fallback: str = "") -> str:
+        """Get custom friendly alias for a device if set, else fallback."""
+        profile = self.get_device_profile(serial)
+        alias = profile.get("alias", "").strip()
+        if alias:
+            return alias
+        # Also check pinned_devices
+        for p in self.get_pinned_devices():
+            if p.get("serial") == serial and p.get("name"):
+                return p["name"]
+        return fallback or serial
+
+    def set_device_alias(self, serial: str, alias: str) -> None:
+        """Set a friendly name/alias for a device."""
+        if not serial:
+            return
+        profile = self.get_device_profile(serial)
+        profile["alias"] = alias.strip()
+        self.save_device_profile(serial, profile)
+        # Also update pinned devices if pinned
+        pinned = self.get_pinned_devices()
+        for p in pinned:
+            if p.get("serial") == serial:
+                p["name"] = alias.strip() or serial
+                self.data["pinned_devices"] = pinned
+                self.save()
+                break
+
+    def get_device_settings(self, serial: str) -> Dict[str, Any]:
+        """Return device-specific mirroring settings if custom settings are enabled, else global settings."""
+        if not serial:
+            return self.data.get("current_settings", {})
+        profile = self.get_device_profile(serial)
+        if profile.get("use_custom_settings", False) and "settings" in profile:
+            return profile["settings"]
+        if profile.get("active_preset"):
+            preset_name = profile["active_preset"]
+            if preset_name in self.data.get("presets", {}):
+                return self.data["presets"][preset_name]
+        return self.data.get("current_settings", {})
+
+    def set_device_settings(self, serial: str, settings: Dict[str, Any]) -> None:
+        """Save current stream settings specifically for a device."""
+        if not serial:
+            return
+        profile = self.get_device_profile(serial)
+        profile["settings"] = settings
+        profile["use_custom_settings"] = True
+        self.save_device_profile(serial, profile)
+
+    def is_device_custom_settings(self, serial: str) -> bool:
+        """Check if a device has custom settings enabled."""
+        profile = self.get_device_profile(serial)
+        return bool(profile.get("use_custom_settings", False))
+
+    def set_device_custom_settings(self, serial: str, enabled: bool) -> None:
+        """Toggle whether a device uses custom overrides vs global settings."""
+        if not serial:
+            return
+        profile = self.get_device_profile(serial)
+        profile["use_custom_settings"] = enabled
+        self.save_device_profile(serial, profile)
+
     def get_favorite_apps(self) -> list:
         default_favs = [
             {"name": "YouTube", "package": "com.google.android.youtube", "icon": "▶️"},

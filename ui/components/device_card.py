@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
@@ -22,10 +23,12 @@ class DeviceCard(QFrame):
     disconnect_requested = Signal(str)  # serial
     connect_requested = Signal(str)  # serial (for offline pinned devices)
     pin_toggled = Signal(str, bool)  # serial, is_pinned
+    profile_requested = Signal(str)  # serial
 
     def __init__(
         self,
         device: AdbDevice,
+        alias: str = "",
         is_active: bool = False,
         is_running: bool = False,
         is_pinned: bool = False,
@@ -34,6 +37,7 @@ class DeviceCard(QFrame):
     ):
         super().__init__(parent)
         self.device = device
+        self.alias = alias or device.display_name
         self.is_active = is_active
         self.is_running = is_running
         self.is_pinned = is_pinned
@@ -52,7 +56,7 @@ class DeviceCard(QFrame):
         main_layout.setContentsMargins(12, 10, 12, 10)
         main_layout.setSpacing(6)
 
-        # 1. Top Row: Status Dot, Device Name, Badges, Pin Button, Close Button
+        # 1. Top Row: Status Dot, Device Name, Badges, Gear Profile, Pin Button, Close Button
         top_row = QHBoxLayout()
         top_row.setSpacing(6)
 
@@ -60,9 +64,20 @@ class DeviceCard(QFrame):
         self.status_dot.setFixedSize(10, 10)
         top_row.addWidget(self.status_dot)
 
-        self.name_label = QLabel(self.device.display_name)
+        self.name_label = QLabel(self.alias)
         self.name_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #FFFFFF;")
         top_row.addWidget(self.name_label, 1)
+
+        # Device Profile / Settings Override button
+        self.btn_profile = QPushButton("⚙️")
+        self.btn_profile.setFixedSize(22, 22)
+        self.btn_profile.setToolTip("Configure per-device profile & custom overrides")
+        self.btn_profile.setStyleSheet(
+            "QPushButton { background: transparent; color: #94A3B8; border: 1px solid #282C37; border-radius: 4px; font-size: 10px; padding: 0px; }"
+            "QPushButton:hover { color: #38BDF8; border-color: #38BDF8; background: #38BDF811; }"
+        )
+        self.btn_profile.clicked.connect(lambda: self.profile_requested.emit(self.device.serial))
+        top_row.addWidget(self.btn_profile)
 
         # Pin button
         self.btn_pin = QPushButton("📍")
@@ -180,10 +195,36 @@ class DeviceCard(QFrame):
                 "QPushButton:hover { color: #F59E0B; border-color: #F59E0B; background: #F59E0B11; }"
             )
 
+    def set_alias(self, alias: str):
+        self.alias = alias or self.device.display_name
+        self.name_label.setText(self.alias)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.selected.emit(self.device.serial)
         super().mousePressEvent(event)
+
+    def contextMenuEvent(self, event):
+        menu = QMenu(self)
+        
+        act_profile = menu.addAction("⚙️ Device Profile & Custom Settings...")
+        act_profile.triggered.connect(lambda: self.profile_requested.emit(self.device.serial))
+
+        menu.addSeparator()
+
+        pin_label = "📌 Unpin Device" if self.is_pinned else "📍 Pin Device to Sidebar"
+        act_pin = menu.addAction(pin_label)
+        act_pin.triggered.connect(self._toggle_pin)
+
+        is_wireless = self.device.is_wireless or (":" in self.device.serial)
+        if is_wireless and not self.is_offline:
+            act_disc = menu.addAction("🔌 Disconnect Wireless")
+            act_disc.triggered.connect(lambda: self.disconnect_requested.emit(self.device.serial))
+        elif self.is_offline:
+            act_rec = menu.addAction("⚡ Reconnect Device")
+            act_rec.triggered.connect(lambda: self.connect_requested.emit(self.device.serial))
+
+        menu.exec(event.globalPos())
 
     def set_active(self, active: bool):
         self.is_active = active

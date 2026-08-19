@@ -464,9 +464,11 @@ class MainWindow(QMainWindow):
             is_active = (dev.serial == self.selected_serial)
             is_running = self.process_manager.is_running(dev.serial)
             is_pinned = self.config.is_pinned(dev.serial)
+            alias = self.config.get_device_alias(dev.serial, fallback=dev.display_name)
 
             card = DeviceCard(
                 dev,
+                alias=alias,
                 is_active=is_active,
                 is_running=is_running,
                 is_pinned=is_pinned,
@@ -478,20 +480,23 @@ class MainWindow(QMainWindow):
             card.stop_requested.connect(lambda s=dev.serial: self._stop_device(s))
             card.disconnect_requested.connect(lambda s=dev.serial: self._on_disconnect_device(s))
             card.pin_toggled.connect(self._on_pin_toggled)
+            card.profile_requested.connect(self._open_device_profile_dialog)
             self.device_list_layout.addWidget(card)
             self.card_widgets[dev.serial] = card
 
         # 2. Render pinned devices that are currently offline / disconnected
         for serial, pinfo in pinned_map.items():
             if serial not in rendered_serials:
+                alias = self.config.get_device_alias(serial, fallback=pinfo.get("name", serial))
                 offline_dev = AdbDevice(
                     serial=serial,
                     state="offline",
-                    model=pinfo.get("name", serial),
+                    model=alias,
                     is_wireless=pinfo.get("is_wireless", True)
                 )
                 card = DeviceCard(
                     offline_dev,
+                    alias=alias,
                     is_active=False,
                     is_running=False,
                     is_pinned=True,
@@ -499,17 +504,32 @@ class MainWindow(QMainWindow):
                 )
                 card.connect_requested.connect(self._on_reconnect_pinned_device)
                 card.pin_toggled.connect(self._on_pin_toggled)
+                card.profile_requested.connect(self._open_device_profile_dialog)
                 self.device_list_layout.addWidget(card)
                 self.card_widgets[serial] = card
 
         self._update_selected_device_state()
 
+    def _open_device_profile_dialog(self, serial: str):
+        from ui.components.device_profile_dialog import DeviceProfileDialog
+        dev = self.devices.get(serial)
+        dlg = DeviceProfileDialog(serial, self.config, dev, self)
+        dlg.profile_saved.connect(self._on_device_profile_saved)
+        dlg.exec()
+
+    def _on_device_profile_saved(self, serial: str):
+        alias = self.config.get_device_alias(serial)
+        if serial in self.card_widgets:
+            self.card_widgets[serial].set_alias(alias)
+        if serial == self.selected_serial:
+            self._update_selected_device_state()
+        self._manual_refresh()
+
     def _on_pin_toggled(self, serial: str, is_pinned: bool):
         if is_pinned:
-            dev_name = serial
+            dev_name = self.config.get_device_alias(serial, serial)
             is_wireless = True
             if serial in self.devices:
-                dev_name = self.devices[serial].display_name
                 is_wireless = self.devices[serial].is_wireless or (":" in serial)
             self.config.pin_device(serial, dev_name, is_wireless)
             self._append_log("System", f"Pinned device {dev_name} ({serial})")
@@ -539,6 +559,7 @@ class MainWindow(QMainWindow):
 
     def _update_selected_device_state(self):
         if not self.selected_serial or self.selected_serial not in self.devices:
+            self.stream_panel.set_active_device(None)
             self.quick_actions.set_device(None)
             self.favorites_bar.set_device(None)
             self.drop_zone.set_device(None)
@@ -548,12 +569,14 @@ class MainWindow(QMainWindow):
             return
 
         dev = self.devices[self.selected_serial]
+        alias = self.config.get_device_alias(dev.serial, dev.display_name)
+        self.stream_panel.set_active_device(dev.serial, alias)
         self.quick_actions.set_device(dev.serial)
         self.favorites_bar.set_device(dev.serial)
         self.drop_zone.set_device(dev.serial)
         self.command_injector.set_device(dev.serial)
         self.app_launcher.set_device(dev.serial)
-        self.lbl_status_device.setText(f"Active Device: {dev.display_name} ({dev.serial})")
+        self.lbl_status_device.setText(f"Active Device: {alias} ({dev.serial})")
         self._update_tray_menu()
 
     def _on_launch_current(self):
@@ -661,15 +684,19 @@ class MainWindow(QMainWindow):
         if not self._check_runtime_installed():
             return
 
-        settings = self.stream_panel.get_settings()
+        if serial == self.selected_serial:
+            settings = self.stream_panel.get_settings()
+        else:
+            settings = self.config.get_device_settings(serial).copy()
+
         if extra_override:
             settings.update(extra_override)
 
-        dev_name = ""
-        if serial in self.devices:
+        dev_name = self.config.get_device_alias(serial)
+        if not dev_name and serial in self.devices:
             dev_name = self.devices[serial].display_name
 
-        self._append_log("System", f"Starting mirroring session for {serial}...")
+        self._append_log("System", f"Starting mirroring session for {dev_name} ({serial})...")
         self.process_manager.start_session(serial, settings, dev_name)
 
     def _launch_device_otg(self, serial: str):
