@@ -95,12 +95,14 @@ class MainWindow(QMainWindow):
 
         self.lbl_ver = QLabel("Checking...")
         self.lbl_ver.setObjectName("badge")
+        self.lbl_ver.mousePressEvent = lambda event: self._open_updater_dialog()
         title_box.addWidget(self.lbl_ver)
 
-        self.btn_header_update = QPushButton("🔄 Update")
+        self.btn_header_update = QPushButton("⬇️ Download Scrcpy")
         self.btn_header_update.setFixedHeight(22)
         self.btn_header_update.setCursor(Qt.PointingHandCursor)
         self.btn_header_update.clicked.connect(self._open_updater_dialog)
+        self.btn_header_update.setVisible(False)
         title_box.addWidget(self.btn_header_update)
 
         header_layout.addLayout(title_box)
@@ -582,27 +584,30 @@ class MainWindow(QMainWindow):
         if self.config.is_scrcpy_installed():
             scrcpy_version = self.config.get_scrcpy_version()
             self.lbl_ver.setText(scrcpy_version)
-            self.lbl_ver.setToolTip(f"Active Scrcpy Runtime Version: {scrcpy_version}")
-            self.lbl_ver.setStyleSheet("background-color: #1E222D; color: #38BDF8; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;")
-            self.btn_header_update.setText("🔄 Update")
-            self.btn_header_update.setToolTip("Check for official Scrcpy updates from GitHub")
-            self.btn_header_update.setStyleSheet(
-                "QPushButton { background-color: #1E222D; color: #38BDF8; border: 1px solid #38BDF844; border-radius: 4px; font-size: 10px; font-weight: bold; padding: 2px 6px; }"
-                "QPushButton:hover { background-color: #38BDF822; border-color: #38BDF8; }"
+            self.lbl_ver.setToolTip(f"Active Scrcpy Runtime: {scrcpy_version} (Click to manage runtime)")
+            self.lbl_ver.setStyleSheet(
+                "background-color: #1E222D; color: #38BDF8; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; border: 1px solid #38BDF833;"
             )
+            self.lbl_ver.setCursor(Qt.PointingHandCursor)
+            # Hide the action button when already installed and up to date
+            self.btn_header_update.setVisible(False)
         else:
-            self.lbl_ver.setText("🔴 Scrcpy Missing")
+            self.lbl_ver.setText("🔴 Not Installed")
             self.lbl_ver.setToolTip("Scrcpy runtime binaries are not downloaded yet.")
-            self.lbl_ver.setStyleSheet("background-color: #7F1D1D; color: #FCA5A5; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;")
+            self.lbl_ver.setStyleSheet(
+                "background-color: #7F1D1D; color: #FCA5A5; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;"
+            )
+            self.lbl_ver.setCursor(Qt.PointingHandCursor)
             self.btn_header_update.setText("⬇️ Download Scrcpy")
             self.btn_header_update.setToolTip("Download official 64-bit Scrcpy binaries from GitHub")
             self.btn_header_update.setStyleSheet(
                 "QPushButton { background-color: #0284C7; color: #FFFFFF; border: none; border-radius: 4px; font-size: 10px; font-weight: bold; padding: 2px 8px; }"
                 "QPushButton:hover { background-color: #38BDF8; }"
             )
+            self.btn_header_update.setVisible(True)
 
     def _check_startup_scrcpy_status(self):
-        """Prompt the user on initial launch if Scrcpy runtime is not downloaded yet."""
+        """Prompt if missing or quietly check for updates in background if installed."""
         if not self.config.is_scrcpy_installed():
             res = QMessageBox.question(
                 self,
@@ -614,6 +619,27 @@ class MainWindow(QMainWindow):
             )
             if res == QMessageBox.Yes:
                 self._open_updater_dialog()
+        else:
+            # Quiet background check for new releases
+            current_ver = self.config.get_scrcpy_version()
+            from core.scrcpy_updater import ScrcpyUpdateChecker
+            self._bg_checker = ScrcpyUpdateChecker(current_ver, self)
+            self._bg_checker.check_finished.connect(self._on_bg_update_check_finished)
+            self._bg_checker.start()
+
+    def _on_bg_update_check_finished(self, has_update: bool, release_info: dict, message: str):
+        """If a newer Scrcpy version is available on GitHub, reveal the update pill."""
+        if has_update and release_info:
+            tag = release_info.get("tag", "")
+            self.btn_header_update.setText(f"✨ Update to {tag}")
+            self.btn_header_update.setToolTip(f"A newer Scrcpy release ({tag}) is available on GitHub. Click to update.")
+            self.btn_header_update.setStyleSheet(
+                "QPushButton { background-color: #0369A1; color: #E0F2FE; border: 1px solid #38BDF8; border-radius: 4px; font-size: 10px; font-weight: bold; padding: 2px 8px; }"
+                "QPushButton:hover { background-color: #0284C7; color: #FFFFFF; }"
+            )
+            self.btn_header_update.setVisible(True)
+        else:
+            self.btn_header_update.setVisible(False)
 
     def _check_runtime_installed(self) -> bool:
         """Verify Scrcpy runtime is available before attempting to launch mirroring or ADB actions."""
