@@ -330,9 +330,6 @@ class MainWindow(QMainWindow):
             b.style().unpolish(b)
             b.style().polish(b)
 
-        if index == 4:
-            self.settings_panel.load_settings()
-
     def _append_log(self, source: str, msg: str):
         self.log_viewer_mini.append_log(source, msg)
         self.log_viewer.append_log(source, msg)

@@ -458,8 +458,13 @@ class ConfigManager:
         # Default destination for downloads
         return project_root / "scrcpy"
 
-    def get_scrcpy_version(self) -> str:
-        """Query real Scrcpy version directly from the scrcpy.exe binary."""
+    _cached_scrcpy_version: Optional[str] = None
+
+    def get_scrcpy_version(self, force_refresh: bool = False) -> str:
+        """Query real Scrcpy version directly from the scrcpy.exe binary (cached in memory for instantaneous lookup)."""
+        if not force_refresh and self._cached_scrcpy_version:
+            return self._cached_scrcpy_version
+
         bin_dir = self.get_scrcpy_bin_dir()
         scrcpy_exe = bin_dir / "scrcpy.exe"
         if scrcpy_exe.exists():
@@ -474,19 +479,22 @@ class ConfigManager:
                     [str(scrcpy_exe), "--version"],
                     capture_output=True,
                     text=True,
-                    timeout=3,
+                    timeout=2,
                     startupinfo=startupinfo,
                     creationflags=creationflags,
                 )
                 m = re.search(r"scrcpy\s+([0-9\.]+)", r.stdout, re.IGNORECASE)
                 if m:
-                    return f"v{m.group(1)}"
+                    self._cached_scrcpy_version = f"v{m.group(1)}"
+                    return self._cached_scrcpy_version
             except Exception:
                 pass
 
             m_dir = re.search(r"v([0-9\.]+)", bin_dir.name)
             if m_dir:
-                return f"v{m_dir.group(1)}"
+                self._cached_scrcpy_version = f"v{m_dir.group(1)}"
+                return self._cached_scrcpy_version
+            self._cached_scrcpy_version = "v4.1"
             return "v4.1"
 
         return "Not Downloaded"
