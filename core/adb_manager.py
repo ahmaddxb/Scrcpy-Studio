@@ -149,10 +149,10 @@ class AdbManager:
             return "usb"
         code, out, _ = self._run_cmd(["-s", serial, "shell", "ip", "route"], timeout=2)
         if code == 0:
-            if "eth0" in out or "eth1" in out or "lan0" in out:
-                return "ethernet"
-            elif "wlan" in out or "swlan" in out:
+            if re.search(r"\b(?:wlan\d*|swlan\d*|wifi\d*)\b", out):
                 return "wifi"
+            elif re.search(r"\b(?:eth\d*|rndis\d*)\b", out):
+                return "ethernet"
         return "wifi"
 
     def get_battery_info(self, serial: str) -> Tuple[Optional[int], bool]:
@@ -528,7 +528,7 @@ class AdbDeviceScanner(QThread):
                 devices = self.adb.list_devices()
                 # Create a fingerprint to only emit when status or devices change
                 fingerprint = "|".join(
-                    f"{d.serial}:{d.state}:{d.battery_level}:{d.is_charging}:{d.screen_off_timeout}" for d in devices
+                    f"{d.serial}:{d.state}:{d.connection_type}:{d.battery_level}:{d.is_charging}:{d.screen_off_timeout}" for d in devices
                 )
                 if fingerprint != self._last_devices_fingerprint:
                     self._last_devices_fingerprint = fingerprint
@@ -536,11 +536,16 @@ class AdbDeviceScanner(QThread):
             except Exception as e:
                 self.error_occurred.emit(str(e))
 
-            self.msleep(self.interval_ms)
+            # Sleep in short increments for responsive thread termination
+            steps = max(1, self.interval_ms // 100)
+            for _ in range(steps):
+                if not self._running:
+                    break
+                self.msleep(100)
 
     def stop(self):
         self._running = False
-        self.wait(1500)
+        self.wait(1000)
 
 
 class AdbAppListWorker(QThread):
