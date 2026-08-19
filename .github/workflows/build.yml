@@ -57,23 +57,7 @@ jobs:
           Remove-Item -Path "scrcpy_latest.zip", "temp_scrcpy" -Recurse -Force
           Test-Path "scrcpy\scrcpy.exe"
 
-      - name: Build Standalone Executable (.EXE)
-        shell: pwsh
-        run: |
-          python -m PyInstaller --name=ScrcpyStudio --onedir --noconsole --clean --noconfirm --distpath=dist --workpath=build --add-data="ui;ui" --add-data="core;core" app.py
-          
-          # Bundle Scrcpy runtime into release folder
-          Copy-Item -Path "scrcpy" -Destination "dist\ScrcpyStudio\scrcpy" -Recurse -Force
-          
-          # Initialize default config.json from template
-          if (Test-Path "config.example.json") {
-              Copy-Item -Path "config.example.json" -Destination "dist\ScrcpyStudio\config.json" -Force
-          }
-          
-          # Copy Documentation
-          Copy-Item -Path "README.md", "LICENSE.txt" -Destination "dist\ScrcpyStudio\" -Force
-
-      - name: Package Release ZIP Archive
+      - name: Build Single-File Standalone Executable (.EXE)
         shell: pwsh
         env:
           INPUT_TAG: ${{ github.event.inputs.tag_name }}
@@ -83,11 +67,21 @@ jobs:
           } elseif ($env:INPUT_TAG) {
               $env:INPUT_TAG
           } else {
-              "v1.0.0-beta"
+              "v1.0.0"
           }
-          $zipName = "Scrcpy-Studio-Windows-$ver.zip"
-          Compress-Archive -Path "dist\ScrcpyStudio\*" -DestinationPath $zipName
-          Write-Host "Created standalone release archive: $zipName"
+          
+          # Convert icon if available
+          if (Test-Path "scrcpy\scrcpy.png") {
+              python -c "from PIL import Image; img = Image.open('scrcpy/scrcpy.png'); img.save('scrcpy/scrcpy.ico', format='ICO')"
+          }
+
+          $iconArg = if (Test-Path "scrcpy\scrcpy.ico") { "--icon=scrcpy\scrcpy.ico" } else { "" }
+          
+          # Build single-file standalone executable with embedded Scrcpy
+          python -m PyInstaller --name="ScrcpyStudio-$ver" --onefile --noconsole --clean --noconfirm --distpath=dist --workpath=build --add-data="ui;ui" --add-data="core;core" --add-data="scrcpy;scrcpy" $iconArg app.py
+          
+          Write-Host "Built standalone single-file EXE:"
+          Get-ChildItem -Path "dist"
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name != '')
@@ -95,7 +89,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
           name: ${{ github.event.inputs.release_title || github.ref_name }}
-          files: Scrcpy-Studio-Windows-*.zip
+          files: dist/ScrcpyStudio-*.exe
           draft: false
           prerelease: ${{ github.event.inputs.is_prerelease || false }}
           generate_release_notes: true

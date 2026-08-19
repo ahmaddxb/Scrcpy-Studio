@@ -8,10 +8,17 @@ from typing import Any, Dict, List, Optional
 
 
 def get_project_root() -> Path:
-    """Return project root directory, supporting PyInstaller frozen executables."""
+    """Return project directory where executable or script lives (for user config and data)."""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent.resolve()
     return Path(__file__).parent.parent.resolve()
+
+
+def get_bundle_dir() -> Path:
+    """Return internal bundled assets directory (supports PyInstaller --onefile and --onedir)."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS).resolve()
+    return get_project_root()
 
 
 DEFAULT_CONFIG: Dict[str, Any] = {
@@ -339,13 +346,18 @@ class ConfigManager:
         if custom_path and Path(custom_path).exists():
             return Path(custom_path)
 
+        # 1. Look for scrcpy folder next to executable or project root
         project_root = get_project_root()
-        # 1. Look for scrcpy folder directly in project root
         scrcpy_dir = project_root / "scrcpy"
-        if scrcpy_dir.exists():
+        if scrcpy_dir.exists() and (scrcpy_dir / "scrcpy.exe").exists():
             return scrcpy_dir
 
-        # 2. Look for any bundled scrcpy-win64-* directory
+        # 2. Look for bundled scrcpy inside PyInstaller --onefile bundle (_MEIPASS)
+        bundle_scrcpy = get_bundle_dir() / "scrcpy"
+        if bundle_scrcpy.exists() and (bundle_scrcpy / "scrcpy.exe").exists():
+            return bundle_scrcpy
+
+        # 3. Look for any bundled scrcpy-win64-* directory
         candidates = sorted(project_root.glob("scrcpy-win64-*"), reverse=True)
         if candidates and candidates[0].is_dir():
             return candidates[0]
