@@ -7,6 +7,20 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Version Tag (e.g., v1.0.0)'
+        required: false
+        default: 'v1.0.0'
+      release_title:
+        description: 'Release Title (e.g., Scrcpy Studio v1.0.0)'
+        required: false
+        default: 'Scrcpy Studio v1.0.0'
+      is_prerelease:
+        description: 'Mark as Pre-release'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -45,17 +59,27 @@ jobs:
 
       - name: Package Portable ZIP Release
         shell: pwsh
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag_name }}
         run: |
-          $ver = if ($env:GITHUB_REF -like "refs/tags/*") { $env:GITHUB_REF -replace "refs/tags/", "" } else { "v1.0.0-beta" }
+          $ver = if ($env:GITHUB_REF -like "refs/tags/*") {
+              $env:GITHUB_REF -replace "refs/tags/", ""
+          } elseif ($env:INPUT_TAG) {
+              $env:INPUT_TAG
+          } else {
+              "v1.0.0-beta"
+          }
           $zipName = "Scrcpy-Studio-Windows-$ver.zip"
           Compress-Archive -Path "app.py", "run.bat", "core", "ui", "scrcpy", "docs", "README.md", "LICENSE.txt" -DestinationPath $zipName
           Write-Host "Created release archive: $zipName"
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name != '')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          name: ${{ github.event.inputs.release_title || github.ref_name }}
           files: Scrcpy-Studio-Windows-*.zip
           draft: false
-          prerelease: false
+          prerelease: ${{ github.event.inputs.is_prerelease || false }}
           generate_release_notes: true
