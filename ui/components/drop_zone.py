@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.adb_manager import AdbManager
+from core.config_manager import ConfigManager
 from core.file_manager import FileTransferWorker
 
 
@@ -23,16 +24,61 @@ class DropZoneWidget(QFrame):
 
     status_message = Signal(str)
 
-    def __init__(self, adb: AdbManager, parent=None):
+    def __init__(self, adb: AdbManager, config: Optional[ConfigManager] = None, parent=None):
         super().__init__(parent)
         self.adb = adb
+        self.config = config
         self.selected_serial: Optional[str] = None
         self.current_worker: Optional[FileTransferWorker] = None
 
         self.setAcceptDrops(True)
         self.setObjectName("dropZone")
+
+        pinned_map = self.config.get("pinned_sidebar_sections", {}) if self.config else {}
+        self.is_pinned_expanded = pinned_map.get("drop_zone", True)
+
         self._setup_ui()
         self._set_idle_style()
+        self._update_expanded_state()
+
+    def _update_pin_style(self):
+        if self.is_pinned_expanded:
+            self.btn_pin.setText("📌")
+            self.btn_pin.setToolTip("Section is Pinned Open (Click to auto-collapse on mouse hover)")
+            self.btn_pin.setStyleSheet(
+                "QPushButton { background: #38BDF822; color: #38BDF8; border: 1px solid #38BDF855; border-radius: 4px; font-size: 10px; padding: 0px; }"
+                "QPushButton:hover { background: #38BDF844; }"
+            )
+        else:
+            self.btn_pin.setText("📍")
+            self.btn_pin.setToolTip("Auto-collapsing on hover (Click to pin permanently expanded)")
+            self.btn_pin.setStyleSheet(
+                "QPushButton { background: transparent; color: #64748B; border: 1px solid #282C37; border-radius: 4px; font-size: 10px; padding: 0px; }"
+                "QPushButton:hover { color: #38BDF8; border-color: #38BDF8; background: #38BDF811; }"
+            )
+
+    def _toggle_pin(self):
+        self.is_pinned_expanded = not self.is_pinned_expanded
+        self._update_pin_style()
+        if self.config:
+            pinned_map = self.config.get("pinned_sidebar_sections", {})
+            pinned_map["drop_zone"] = self.is_pinned_expanded
+            self.config.set("pinned_sidebar_sections", pinned_map)
+        self._update_expanded_state()
+
+    def _update_expanded_state(self):
+        should_show = self.is_pinned_expanded or self.underMouse()
+        self.body_widget.setVisible(should_show)
+
+    def enterEvent(self, event):
+        if not self.is_pinned_expanded:
+            self.body_widget.setVisible(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if not self.is_pinned_expanded:
+            self.body_widget.setVisible(False)
+        super().leaveEvent(event)
 
     def set_device(self, serial: Optional[str]):
         self.selected_serial = serial
@@ -43,33 +89,59 @@ class DropZoneWidget(QFrame):
             self.lbl_main.setText("Drag & Drop APK or Files here to install / push to device")
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(8)
-        layout.setAlignment(Qt.AlignCenter)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(12, 10, 12, 10)
+        main_layout.setSpacing(6)
+
+        # Header Row
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(6)
+
+        lbl_title = QLabel("📦 File Transfer & APK Drop")
+        lbl_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #38BDF8; border: none;")
+        header_row.addWidget(lbl_title)
+        header_row.addStretch(1)
+
+        self.btn_pin = QPushButton("📌" if self.is_pinned_expanded else "📍")
+        self.btn_pin.setFixedSize(22, 22)
+        self.btn_pin.setCursor(Qt.PointingHandCursor)
+        self._update_pin_style()
+        self.btn_pin.clicked.connect(self._toggle_pin)
+        header_row.addWidget(self.btn_pin)
+
+        main_layout.addLayout(header_row)
+
+        # Body Widget
+        self.body_widget = QWidget()
+        self.body_widget.setStyleSheet("background: transparent;")
+        b_layout = QVBoxLayout(self.body_widget)
+        b_layout.setContentsMargins(0, 4, 0, 2)
+        b_layout.setSpacing(6)
+        b_layout.setAlignment(Qt.AlignCenter)
 
         self.lbl_icon = QLabel("📦")
         self.lbl_icon.setAlignment(Qt.AlignCenter)
-        self.lbl_icon.setStyleSheet("font-size: 24px;")
-        layout.addWidget(self.lbl_icon)
+        self.lbl_icon.setStyleSheet("font-size: 22px;")
+        b_layout.addWidget(self.lbl_icon)
 
         self.lbl_main = QLabel("Drag & Drop APK or Files here to install / push to device")
         self.lbl_main.setAlignment(Qt.AlignCenter)
         self.lbl_main.setWordWrap(True)
-        self.lbl_main.setStyleSheet("font-weight: 500; color: #CBD5E1; font-size: 12px;")
-        layout.addWidget(self.lbl_main)
+        self.lbl_main.setStyleSheet("font-weight: 500; color: #CBD5E1; font-size: 11px;")
+        b_layout.addWidget(self.lbl_main)
 
-        self.lbl_sub = QLabel("APKs will auto-install; other files are sent to /sdcard/Download/")
+        self.lbl_sub = QLabel("APKs auto-install; files are pushed to /sdcard/Download/")
         self.lbl_sub.setAlignment(Qt.AlignCenter)
         self.lbl_sub.setStyleSheet("font-size: 10px; color: #64748B;")
-        layout.addWidget(self.lbl_sub)
+        b_layout.addWidget(self.lbl_sub)
 
         # Progress bar (hidden when idle)
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)  # indeterminate
-        self.progress_bar.setFixedHeight(6)
+        self.progress_bar.setFixedHeight(5)
         self.progress_bar.setVisible(False)
-        layout.addWidget(self.progress_bar)
+        b_layout.addWidget(self.progress_bar)
 
         # Browse buttons row
         btn_row = QHBoxLayout()
@@ -86,7 +158,9 @@ class DropZoneWidget(QFrame):
         self.btn_pick_file.clicked.connect(self._browse_files)
         btn_row.addWidget(self.btn_pick_file)
 
-        layout.addLayout(btn_row)
+        b_layout.addLayout(btn_row)
+
+        main_layout.addWidget(self.body_widget)
 
     def _browse_apk(self):
         if not self.selected_serial:

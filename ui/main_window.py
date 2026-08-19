@@ -247,11 +247,11 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.favorites_bar, 0)
 
         # Quick Actions Bar
-        self.quick_actions = QuickActionBar(self.adb)
+        self.quick_actions = QuickActionBar(self.adb, self.config)
         left_layout.addWidget(self.quick_actions, 0)
 
         # Drag & Drop Zone
-        self.drop_zone = DropZoneWidget(self.adb)
+        self.drop_zone = DropZoneWidget(self.adb, self.config)
         left_layout.addWidget(self.drop_zone, 0)
 
         splitter.addWidget(left_container)

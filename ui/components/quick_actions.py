@@ -17,31 +17,105 @@ from PySide6.QtWidgets import (
 )
 
 from core.adb_manager import AdbManager
+from core.config_manager import ConfigManager
 
 
-class QuickActionBar(QGroupBox):
+class QuickActionBar(QFrame):
     """Dock widget for sending instant physical key events, screenshots, and device utilities."""
 
     action_triggered = Signal(str, str)  # action_name, message
     disconnect_requested = Signal(str)  # serial or empty for all
     open_apps_requested = Signal()
 
-    def __init__(self, adb: AdbManager, parent=None):
-        super().__init__("⚡ Quick Actions & Device Controls", parent)
+    def __init__(self, adb: AdbManager, config: Optional[ConfigManager] = None, parent=None):
+        super().__init__(parent)
         self.adb = adb
+        self.config = config
         self.selected_serial: Optional[str] = None
+
+        self.setObjectName("quickActionsCard")
+        self.setStyleSheet(
+            "QFrame#quickActionsCard { background-color: #171922; border: 1px solid #2B303E; border-radius: 8px; }"
+        )
+
+        pinned_map = self.config.get("pinned_sidebar_sections", {}) if self.config else {}
+        self.is_pinned_expanded = pinned_map.get("quick_actions", True)
+
         self._setup_ui()
+        self._update_expanded_state()
+
+    def _update_pin_style(self):
+        if self.is_pinned_expanded:
+            self.btn_pin.setText("📌")
+            self.btn_pin.setToolTip("Section is Pinned Open (Click to auto-collapse on mouse hover)")
+            self.btn_pin.setStyleSheet(
+                "QPushButton { background: #38BDF822; color: #38BDF8; border: 1px solid #38BDF855; border-radius: 4px; font-size: 10px; padding: 0px; }"
+                "QPushButton:hover { background: #38BDF844; }"
+            )
+        else:
+            self.btn_pin.setText("📍")
+            self.btn_pin.setToolTip("Auto-collapsing on hover (Click to pin permanently expanded)")
+            self.btn_pin.setStyleSheet(
+                "QPushButton { background: transparent; color: #64748B; border: 1px solid #282C37; border-radius: 4px; font-size: 10px; padding: 0px; }"
+                "QPushButton:hover { color: #38BDF8; border-color: #38BDF8; background: #38BDF811; }"
+            )
+
+    def _toggle_pin(self):
+        self.is_pinned_expanded = not self.is_pinned_expanded
+        self._update_pin_style()
+        if self.config:
+            pinned_map = self.config.get("pinned_sidebar_sections", {})
+            pinned_map["quick_actions"] = self.is_pinned_expanded
+            self.config.set("pinned_sidebar_sections", pinned_map)
+        self._update_expanded_state()
+
+    def _update_expanded_state(self):
+        should_show = self.is_pinned_expanded or self.underMouse()
+        self.body_widget.setVisible(should_show)
+
+    def enterEvent(self, event):
+        if not self.is_pinned_expanded:
+            self.body_widget.setVisible(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if not self.is_pinned_expanded:
+            self.body_widget.setVisible(False)
+        super().leaveEvent(event)
 
     def set_device(self, serial: Optional[str]):
         self.selected_serial = serial
         self.setEnabled(bool(serial))
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 12, 10, 10)
-        layout.setSpacing(8)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(12, 10, 12, 10)
+        main_layout.setSpacing(8)
 
-        grid = QGridLayout()
+        # Header Row
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(6)
+
+        lbl_title = QLabel("⚡ Quick Actions & Device Controls")
+        lbl_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #38BDF8; border: none;")
+        header_row.addWidget(lbl_title)
+        header_row.addStretch(1)
+
+        self.btn_pin = QPushButton("📌" if self.is_pinned_expanded else "📍")
+        self.btn_pin.setFixedSize(22, 22)
+        self.btn_pin.setCursor(Qt.PointingHandCursor)
+        self._update_pin_style()
+        self.btn_pin.clicked.connect(self._toggle_pin)
+        header_row.addWidget(self.btn_pin)
+
+        main_layout.addLayout(header_row)
+
+        # Body Widget containing Grid
+        self.body_widget = QWidget()
+        self.body_widget.setStyleSheet("background: transparent;")
+        grid = QGridLayout(self.body_widget)
+        grid.setContentsMargins(0, 2, 0, 2)
         grid.setSpacing(6)
 
         # Row 0: Hardware Keys & Unlock
@@ -77,7 +151,7 @@ class QuickActionBar(QGroupBox):
         grid.addWidget(self.btn_wake, 2, 2)
         grid.addWidget(self.btn_disconnect, 2, 3)
 
-        layout.addLayout(grid)
+        main_layout.addWidget(self.body_widget)
 
     def _unlock_device(self):
         if not self.selected_serial:

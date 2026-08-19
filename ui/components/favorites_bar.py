@@ -174,7 +174,56 @@ class FavoriteAppsBar(QFrame):
             "QFrame#favoriteAppsCard { background-color: #171922; border: 1px solid #2B303E; border-radius: 8px; }"
         )
 
+        # Load pinned state
+        pinned_map = self.config.get("pinned_sidebar_sections", {})
+        self.is_pinned_expanded = pinned_map.get("favorites", True)
+
         self._setup_ui()
+        self._update_expanded_state()
+
+    def _update_pin_style(self):
+        if self.is_pinned_expanded:
+            self.btn_pin.setText("📌")
+            self.btn_pin.setToolTip("Section is Pinned Open (Click to auto-collapse on mouse hover)")
+            self.btn_pin.setStyleSheet(
+                "QPushButton { background: #38BDF822; color: #38BDF8; border: 1px solid #38BDF855; border-radius: 4px; font-size: 10px; padding: 0px; }"
+                "QPushButton:hover { background: #38BDF844; }"
+            )
+        else:
+            self.btn_pin.setText("📍")
+            self.btn_pin.setToolTip("Auto-collapsing on hover (Click to pin permanently expanded)")
+            self.btn_pin.setStyleSheet(
+                "QPushButton { background: transparent; color: #64748B; border: 1px solid #282C37; border-radius: 4px; font-size: 10px; padding: 0px; }"
+                "QPushButton:hover { color: #38BDF8; border-color: #38BDF8; background: #38BDF811; }"
+            )
+
+    def _toggle_pin(self):
+        self.is_pinned_expanded = not self.is_pinned_expanded
+        self._update_pin_style()
+        pinned_map = self.config.get("pinned_sidebar_sections", {})
+        pinned_map["favorites"] = self.is_pinned_expanded
+        self.config.set("pinned_sidebar_sections", pinned_map)
+        self._update_expanded_state()
+
+    def _update_expanded_state(self):
+        should_show = self.is_pinned_expanded or self.underMouse()
+        self.scroll_area.setVisible(should_show)
+        self.btn_add_fav.setVisible(should_show)
+        self.btn_more.setVisible(should_show)
+
+    def enterEvent(self, event):
+        if not self.is_pinned_expanded:
+            self.scroll_area.setVisible(True)
+            self.btn_add_fav.setVisible(True)
+            self.btn_more.setVisible(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if not self.is_pinned_expanded:
+            self.scroll_area.setVisible(False)
+            self.btn_add_fav.setVisible(False)
+            self.btn_more.setVisible(False)
+        super().leaveEvent(event)
 
     def _on_icon_ready(self, pkg: str, icon_path: str, source: str = "", detail: str = ""):
         if pkg in self.chip_buttons:
@@ -236,6 +285,14 @@ class FavoriteAppsBar(QFrame):
         self.btn_more.setCursor(Qt.PointingHandCursor)
         self.btn_more.clicked.connect(lambda: self.open_apps_manager_requested.emit())
         header_row.addWidget(self.btn_more)
+
+        # Pin / Expand toggle button
+        self.btn_pin = QPushButton("📌" if self.is_pinned_expanded else "📍")
+        self.btn_pin.setFixedSize(22, 22)
+        self.btn_pin.setCursor(Qt.PointingHandCursor)
+        self._update_pin_style()
+        self.btn_pin.clicked.connect(self._toggle_pin)
+        header_row.addWidget(self.btn_pin)
 
         self.main_layout.addLayout(header_row)
 
