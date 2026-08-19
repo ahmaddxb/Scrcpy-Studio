@@ -231,13 +231,31 @@ class AdbManager:
         return self.send_keyevent(serial, 223)
 
     def get_current_focused_package(self, serial: str) -> Optional[str]:
-        """Get the package name of the currently focused app on the device."""
-        code, out, _ = self._run_cmd(["-s", serial, "shell", "dumpsys", "window"], timeout=4)
+        """Get the package name of the active app specifically on the physical phone screen (Display 0)."""
+        # 1. Query Display 0 topResumedActivity from dumpsys activity activities (exact for multi-display)
+        code, out, _ = self._run_cmd(["-s", serial, "shell", "dumpsys", "activity", "activities"], timeout=4)
         if code == 0:
-            m = re.search(r"mFocusedApp=ActivityRecord\{[^\}]*\s+([a-zA-Z0-9_\.]+)/", out)
+            sections = re.split(r"Display #(\d+)", out)
+            if "0" in sections:
+                d0_idx = sections.index("0")
+                d0_content = sections[d0_idx + 1]
+                m = re.search(r"topResumedActivity=ActivityRecord\{[^\}]*\s+([a-zA-Z0-9_\.]+)/", d0_content)
+                if m:
+                    return m.group(1)
+                m2 = re.search(r"mResumedActivity:\s*ActivityRecord\{[^\}]*\s+([a-zA-Z0-9_\.]+)/", d0_content)
+                if m2:
+                    return m2.group(1)
+                m3 = re.search(r"ActivityRecord\{[^\}]*\s+([a-zA-Z0-9_\.]+)/", d0_content)
+                if m3:
+                    return m3.group(1)
+
+        # 2. Fallback to dumpsys window
+        code2, out2, _ = self._run_cmd(["-s", serial, "shell", "dumpsys", "window"], timeout=3)
+        if code2 == 0:
+            m = re.search(r"mFocusedApp=ActivityRecord\{[^\}]*\s+([a-zA-Z0-9_\.]+)/", out2)
             if m:
                 return m.group(1)
-            m2 = re.search(r"mCurrentFocus=Window\{[^\}]*\s+([a-zA-Z0-9_\.]+)/", out)
+            m2 = re.search(r"mCurrentFocus=Window\{[^\}]*\s+([a-zA-Z0-9_\.]+)/", out2)
             if m2:
                 return m2.group(1)
         return None
