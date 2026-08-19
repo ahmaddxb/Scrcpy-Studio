@@ -24,9 +24,7 @@ class QuickActionBar(QFrame):
     """Dock widget for sending instant physical key events, screenshots, and device utilities."""
 
     action_triggered = Signal(str, str)  # action_name, message
-    disconnect_requested = Signal(str)  # serial or empty for all
     open_apps_requested = Signal()
-    pin_injector_requested = Signal(str)  # serial
 
     def __init__(self, adb: AdbManager, config: Optional[ConfigManager] = None, parent=None):
         super().__init__(parent)
@@ -141,23 +139,14 @@ class QuickActionBar(QFrame):
         grid.addWidget(self.btn_app_switch, 1, 2)
         grid.addWidget(self.btn_notif, 1, 3)
 
-        # Row 2: Utilities
+        # Row 2: Utilities (Screenshot & Wake)
         self.btn_screenshot = self._create_btn("📸 Screenshot", self._take_screenshot)
-        self.btn_pin_inject = self._create_btn("🔑 Send PIN", self._open_pin_injector)
         self.btn_wake = self._create_btn("💡 Wake", lambda: self._send_key(224, "Wake Up"))
-        self.btn_disconnect = self._create_btn("🔌 Disconnect", self._disconnect_device)
 
-        grid.addWidget(self.btn_screenshot, 2, 0)
-        grid.addWidget(self.btn_pin_inject, 2, 1)
-        grid.addWidget(self.btn_wake, 2, 2)
-        grid.addWidget(self.btn_disconnect, 2, 3)
+        grid.addWidget(self.btn_screenshot, 2, 0, 1, 2)
+        grid.addWidget(self.btn_wake, 2, 2, 1, 2)
 
         main_layout.addWidget(self.body_widget)
-
-    def _open_pin_injector(self):
-        if not self.selected_serial:
-            return
-        self.pin_injector_requested.emit(self.selected_serial)
 
     def _unlock_device(self):
         if not self.selected_serial:
@@ -200,11 +189,6 @@ class QuickActionBar(QFrame):
                 pass
         else:
             self.action_triggered.emit("Screenshot", f"Failed to capture screenshot from {self.selected_serial}")
-
-    def _disconnect_device(self):
-        if not self.selected_serial:
-            return
-        self.disconnect_requested.emit(self.selected_serial)
 
     def _restart_adb(self):
         ok, msg = self.adb.restart_server()
