@@ -230,6 +230,48 @@ class AdbManager:
         """Turn off device screen / sleep (KEYCODE_SLEEP = 223)."""
         return self.send_keyevent(serial, 223)
 
+    def get_current_focused_package(self, serial: str) -> Optional[str]:
+        """Get the package name of the currently focused app on the device."""
+        code, out, _ = self._run_cmd(["-s", serial, "shell", "dumpsys", "window"], timeout=4)
+        if code == 0:
+            m = re.search(r"mFocusedApp=ActivityRecord\{[^\}]*\s+([a-zA-Z0-9_\.]+)/", out)
+            if m:
+                return m.group(1)
+            m2 = re.search(r"mCurrentFocus=Window\{[^\}]*\s+([a-zA-Z0-9_\.]+)/", out)
+            if m2:
+                return m2.group(1)
+        return None
+
+    def get_virtual_display_ids(self, serial: str) -> List[int]:
+        """Query all active virtual display IDs from dumpsys display."""
+        code, out, _ = self._run_cmd(["-s", serial, "shell", "dumpsys", "display"], timeout=4)
+        if code == 0:
+            found = re.findall(r"DisplayInfo\{.*?scrcpy.*?, displayId (\d+)", out)
+            if not found:
+                found = re.findall(r"DisplayInfo\{[^\}]*displayId (\d+)[^\}]*VIRTUAL", out)
+            return [int(x) for x in found if int(x) > 0]
+        return []
+
+    def move_app_to_display(self, serial: str, package: str, display_id: int) -> Tuple[bool, str]:
+        """Move / launch an active app directly onto a specific display ID."""
+        # 1. Try intent start on target display
+        code, out, err = self._run_cmd(
+            ["-s", serial, "shell", "am", "start", "--display", str(display_id), "-a", "android.intent.action.MAIN", "-p", package],
+            timeout=5
+        )
+        if code == 0 and "error" not in (out + err).lower():
+            return True, f"Moved '{package}' to Display {display_id}"
+
+        # 2. Fallback to monkey launch with display flag
+        code2, out2, err2 = self._run_cmd(
+            ["-s", serial, "shell", "monkey", "-p", package, "--display", str(display_id), "-c", "android.intent.category.LAUNCHER", "1"],
+            timeout=5
+        )
+        if code2 == 0:
+            return True, f"Moved '{package}' to Display {display_id}"
+
+        return False, out or err or "Failed to transfer app to display"
+
     def unlock_device(self, serial: str) -> bool:
         """Wake up device and dismiss swipe lock screen."""
         self.send_keyevent(serial, 224)  # WAKEUP

@@ -19,6 +19,7 @@ class ScrcpySession:
     start_time: datetime.datetime = field(default_factory=datetime.datetime.now)
     is_recording: bool = False
     record_file: Optional[str] = None
+    display_id: Optional[int] = None
 
 
 class ProcessManager(QObject):
@@ -280,14 +281,36 @@ class ProcessManager(QObject):
             return False
         return session.process.state() == QProcess.ProcessState.Running
 
+    def _check_display_id_in_line(self, key: str, line: str):
+        import re
+        m = re.search(r"Display:\s*\[(\d+)\]", line, re.IGNORECASE)
+        if not m:
+            m = re.search(r"(?:New display|displayId|virtual display)\D+(\d+)", line, re.IGNORECASE)
+        if m:
+            disp_id = int(m.group(1))
+            if key in self.sessions:
+                self.sessions[key].display_id = disp_id
+
+    def get_active_display_id(self, key_or_serial: str) -> Optional[int]:
+        """Get the active virtual display ID for a given session key or device serial."""
+        if key_or_serial in self.sessions and self.sessions[key_or_serial].display_id is not None:
+            return self.sessions[key_or_serial].display_id
+        for k, sess in self.sessions.items():
+            dev = getattr(sess, "device_serial", "") or k.split("::")[0]
+            if dev == key_or_serial and sess.display_id is not None:
+                return sess.display_id
+        return None
+
     def _on_stdout(self, key: str, process: QProcess):
         data = process.readAllStandardOutput().data().decode("utf-8", errors="replace").strip()
         if data:
+            self._check_display_id_in_line(key, data)
             self.log_output.emit(key, data)
 
     def _on_stderr(self, key: str, process: QProcess):
         data = process.readAllStandardError().data().decode("utf-8", errors="replace").strip()
         if data:
+            self._check_display_id_in_line(key, data)
             self.log_output.emit(key, data)
 
     def _on_finished(self, key: str, exit_code: int):

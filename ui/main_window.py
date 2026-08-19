@@ -342,6 +342,7 @@ class MainWindow(QMainWindow):
 
         # Favorite Apps Bar
         self.favorites_bar.launch_app_requested.connect(self._on_favorite_app_launch)
+        self.favorites_bar.move_app_requested.connect(self._on_move_favorite_app_to_display)
         self.favorites_bar.open_apps_manager_requested.connect(lambda: self._switch_page(1))
 
         # Quick actions
@@ -412,6 +413,29 @@ class MainWindow(QMainWindow):
         res_info = f" ({res})" if res else " (Native)"
         self._append_log("FavoriteApps", f"Launching favorite app '{name}' in virtual display window{res_info}...")
         self.process_manager.start_session(serial, settings, title, session_id=session_id)
+
+    def _on_move_favorite_app_to_display(self, serial: str, package: str, name: str, display_res: str = ""):
+        if not self._check_runtime_installed():
+            return
+
+        session_id = f"{serial}::{package}"
+        # 1. Check if a virtual display is already running for this device or app
+        active_disp_id = self.process_manager.get_active_display_id(session_id) or self.process_manager.get_active_display_id(serial)
+
+        if active_disp_id is None:
+            # Check on device via ADB
+            v_ids = self.adb.get_virtual_display_ids(serial)
+            if v_ids:
+                active_disp_id = v_ids[-1]
+
+        if active_disp_id is not None:
+            ok, msg = self.adb.move_app_to_display(serial, package, active_disp_id)
+            status = "Success" if ok else "Notice"
+            self._append_log("AppTransfer", f"[{status}] Transferred running '{name}' to Virtual Display #{active_disp_id}: {msg}")
+        else:
+            # No virtual display running yet: launch the virtual display window with this app!
+            self._append_log("AppTransfer", f"Opening Virtual Display for '{name}' and pulling running task from phone...")
+            self._on_favorite_app_launch(serial, package, name, display_res)
 
     def _on_app_display_launch(self, serial: str, settings: Dict, package: str, title: str):
         if not self._check_runtime_installed():
