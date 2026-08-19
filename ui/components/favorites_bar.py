@@ -158,7 +158,6 @@ class FavoriteAppsBar(QFrame):
     """Spacious quick-launch dock for user favorite apps with individual display presets & custom labels."""
 
     launch_app_requested = Signal(str, str, str, str)  # serial, package_name, display_name, display_res
-    move_app_requested = Signal(str, str, str, str)  # serial, package_name, display_name, display_res
     pull_active_app_requested = Signal(str)  # serial
     open_apps_manager_requested = Signal()
 
@@ -460,16 +459,12 @@ class FavoriteAppsBar(QFrame):
             act_p.triggered.connect(lambda _, v=p_val: self._set_fav_preset(package, name, fav.get("icon", "📱"), v))
 
         menu.addSeparator()
-        act_move = menu.addAction(f"🔀 Move '{name}' from Phone to PC Display")
         act_shortcut = menu.addAction("📌 Create Desktop Shortcut (.lnk)")
         act_remove = menu.addAction("🗑 Remove from Favorites")
 
         action = menu.exec(source_btn.mapToGlobal(pos))
         if action == act_launch:
             self._on_chip_clicked(package, name, cur_res)
-        elif action == act_move:
-            if self.selected_serial:
-                self.move_app_requested.emit(self.selected_serial, package, name, cur_res)
         elif action == act_reextract:
             self.icon_manager.get_icon(package, self.selected_serial, force_refresh=True)
         elif action == act_web_icon:

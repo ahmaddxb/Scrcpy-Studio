@@ -343,7 +343,6 @@ class MainWindow(QMainWindow):
 
         # Favorite Apps Bar
         self.favorites_bar.launch_app_requested.connect(self._on_favorite_app_launch)
-        self.favorites_bar.move_app_requested.connect(self._on_move_favorite_app_to_display)
         self.favorites_bar.pull_active_app_requested.connect(self._on_pull_active_phone_app)
         self.favorites_bar.open_apps_manager_requested.connect(lambda: self._switch_page(1))
 
