@@ -25,6 +25,7 @@ config.json
 
 # Gemini / Antigravity workspace files
 .gemini/
+.agents/
 AGENTS.md
 TODO.md
 
