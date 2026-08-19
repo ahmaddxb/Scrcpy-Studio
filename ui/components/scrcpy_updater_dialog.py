@@ -81,8 +81,12 @@ class ScrcpyUpdaterDialog(QDialog):
         row_curr.addWidget(lbl_c_title)
 
         current_ver = self.config.get_scrcpy_version()
-        self.lbl_curr_ver = QLabel(current_ver)
-        self.lbl_curr_ver.setStyleSheet("color: #F8FAFC; font-weight: bold; font-size: 13px; font-family: monospace;")
+        if not self.config.is_scrcpy_installed():
+            self.lbl_curr_ver = QLabel("Not Downloaded")
+            self.lbl_curr_ver.setStyleSheet("color: #F87171; font-weight: bold; font-size: 13px; font-family: monospace;")
+        else:
+            self.lbl_curr_ver = QLabel(current_ver)
+            self.lbl_curr_ver.setStyleSheet("color: #F8FAFC; font-weight: bold; font-size: 13px; font-family: monospace;")
         row_curr.addWidget(self.lbl_curr_ver)
         row_curr.addStretch(1)
         ver_layout.addLayout(row_curr)
@@ -142,7 +146,7 @@ class ScrcpyUpdaterDialog(QDialog):
 
         btn_row.addStretch(1)
 
-        self.btn_action = QPushButton("⬇️ Download & Update")
+        self.btn_action = QPushButton("⬇️ Download Scrcpy")
         self.btn_action.setObjectName("primaryBtn")
         self.btn_action.setFixedHeight(32)
         self.btn_action.setEnabled(False)
@@ -189,7 +193,14 @@ class ScrcpyUpdaterDialog(QDialog):
         body = release_info.get("body", "No release notes provided.")
         self.text_notes.setMarkdown(body)
 
-        if has_update:
+        is_installed = self.config.is_scrcpy_installed()
+        if not is_installed:
+            self.badge_status.setText("Ready to Download ⬇️")
+            self.badge_status.setStyleSheet("background: #0369A1; color: #E0F2FE; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
+            self.btn_action.setText(f"⬇️ Download & Install {tag}")
+            self.btn_action.setEnabled(True)
+            self.lbl_progress_status.setText(f"Official Scrcpy runtime {tag} is ready to download ({release_info.get('asset_size', 0)/(1024*1024):.1f} MB)")
+        elif has_update:
             self.badge_status.setText("Update Available! ✨")
             self.badge_status.setStyleSheet("background: #0369A1; color: #E0F2FE; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
             self.btn_action.setText(f"⬇️ Update to {tag}")

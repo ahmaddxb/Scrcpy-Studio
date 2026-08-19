@@ -341,9 +341,14 @@ class ConfigManager:
         self.data["virtual_display_presets"] = [p for p in presets if p.get("value") != value]
         self.save()
 
+    def is_scrcpy_installed(self) -> bool:
+        """Check whether scrcpy.exe and adb.exe binaries exist and are runnable."""
+        bin_dir = self.get_scrcpy_bin_dir()
+        return (bin_dir / "scrcpy.exe").exists() and (bin_dir / "adb.exe").exists()
+
     def get_scrcpy_bin_dir(self) -> Path:
         custom_path = self.data.get("scrcpy_path", "")
-        if custom_path and Path(custom_path).exists():
+        if custom_path and Path(custom_path).exists() and (Path(custom_path) / "scrcpy.exe").exists():
             return Path(custom_path)
 
         # 1. Look for scrcpy folder next to executable or project root
@@ -352,17 +357,13 @@ class ConfigManager:
         if scrcpy_dir.exists() and (scrcpy_dir / "scrcpy.exe").exists():
             return scrcpy_dir
 
-        # 2. Look for bundled scrcpy inside PyInstaller --onefile bundle (_MEIPASS)
-        bundle_scrcpy = get_bundle_dir() / "scrcpy"
-        if bundle_scrcpy.exists() and (bundle_scrcpy / "scrcpy.exe").exists():
-            return bundle_scrcpy
-
-        # 3. Look for any bundled scrcpy-win64-* directory
+        # 2. Look for any bundled scrcpy-win64-* directory
         candidates = sorted(project_root.glob("scrcpy-win64-*"), reverse=True)
-        if candidates and candidates[0].is_dir():
+        if candidates and candidates[0].is_dir() and (candidates[0] / "scrcpy.exe").exists():
             return candidates[0]
 
-        return Path(os.getcwd()) / "scrcpy"
+        # Default destination for downloads
+        return project_root / "scrcpy"
 
     def get_scrcpy_version(self) -> str:
         """Query real Scrcpy version directly from the scrcpy.exe binary."""
@@ -390,8 +391,9 @@ class ConfigManager:
             except Exception:
                 pass
 
-        # Fallback to directory name parsing
-        m_dir = re.search(r"v([0-9\.]+)", bin_dir.name)
-        if m_dir:
-            return f"v{m_dir.group(1)}"
-        return "v4.1"
+            m_dir = re.search(r"v([0-9\.]+)", bin_dir.name)
+            if m_dir:
+                return f"v{m_dir.group(1)}"
+            return "v4.1"
+
+        return "Not Downloaded"

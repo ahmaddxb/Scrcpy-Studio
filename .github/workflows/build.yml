@@ -44,19 +44,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install PySide6 pyinstaller pillow
 
-      - name: Download Official Scrcpy Runtime
-        shell: pwsh
-        run: |
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/Genymobile/scrcpy/releases/latest"
-          $asset = $release.assets | Where-Object { $_.name -like "*win64*.zip" } | Select-Object -First 1
-          Write-Host "Downloading Scrcpy: $($asset.name) from $($asset.browser_download_url)..."
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "scrcpy_latest.zip"
-          Expand-Archive -Path "scrcpy_latest.zip" -DestinationPath "temp_scrcpy"
-          $inner = Get-ChildItem -Path "temp_scrcpy" -Directory | Select-Object -First 1
-          Move-Item -Path $inner.FullName -Destination "scrcpy"
-          Remove-Item -Path "scrcpy_latest.zip", "temp_scrcpy" -Recurse -Force
-          Test-Path "scrcpy\scrcpy.exe"
-
       - name: Build Single-File Standalone Executable (.EXE)
         shell: pwsh
         env:
@@ -71,14 +58,14 @@ jobs:
           }
           
           # Convert icon if available
-          if (Test-Path "scrcpy\scrcpy.png") {
-              python -c "from PIL import Image; img = Image.open('scrcpy/scrcpy.png'); img.save('scrcpy/scrcpy.ico', format='ICO')"
+          if (Test-Path "ui\assets\icon.png") {
+              python -c "from PIL import Image; img = Image.open('ui/assets/icon.png'); img.save('ui/assets/icon.ico', format='ICO')"
           }
 
-          $iconArg = if (Test-Path "scrcpy\scrcpy.ico") { "--icon=scrcpy\scrcpy.ico" } else { "" }
+          $iconArg = if (Test-Path "ui\assets\icon.ico") { "--icon=ui\assets\icon.ico" } else { "" }
           
-          # Build single-file standalone executable with embedded Scrcpy
-          python -m PyInstaller --name="ScrcpyStudio-$ver" --onefile --noconsole --clean --noconfirm --distpath=dist --workpath=build --add-data="ui;ui" --add-data="core;core" --add-data="scrcpy;scrcpy" $iconArg app.py
+          # Build lightweight standalone single-file executable without bundling external binaries
+          python -m PyInstaller --name="ScrcpyStudio-$ver" --onefile --noconsole --clean --noconfirm --distpath=dist --workpath=build --add-data="ui;ui" --add-data="core;core" $iconArg app.py
           
           Write-Host "Built standalone single-file EXE:"
           Get-ChildItem -Path "dist"

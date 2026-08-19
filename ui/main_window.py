@@ -58,11 +58,14 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(960, 640)
 
         self._setup_ui()
+        self._update_header_runtime_status()
         self._setup_tray_icon()
         self._wire_signals()
         self._start_scanner()
         # Attempt auto-connecting to pinned wireless devices on startup
         QTimer.singleShot(500, self._auto_connect_pinned_devices)
+        # Check if scrcpy is downloaded on first launch
+        QTimer.singleShot(800, self._check_startup_scrcpy_status)
 
     def _setup_ui(self):
         central_widget = QWidget(self)
@@ -90,19 +93,12 @@ class MainWindow(QMainWindow):
         lbl_title.setStyleSheet("font-size: 16px; font-weight: 800; color: #38BDF8; letter-spacing: 0.5px;")
         title_box.addWidget(lbl_title)
 
-        scrcpy_version = self.config.get_scrcpy_version() if self.config else "v4.1"
-        self.lbl_ver = QLabel(scrcpy_version)
+        self.lbl_ver = QLabel("Checking...")
         self.lbl_ver.setObjectName("badge")
-        self.lbl_ver.setToolTip(f"Active Scrcpy Runtime Version: {scrcpy_version}")
         title_box.addWidget(self.lbl_ver)
 
         self.btn_header_update = QPushButton("🔄 Update")
-        self.btn_header_update.setToolTip("Check for official Scrcpy updates from GitHub")
         self.btn_header_update.setFixedHeight(22)
-        self.btn_header_update.setStyleSheet(
-            "QPushButton { background-color: #1E222D; color: #38BDF8; border: 1px solid #38BDF844; border-radius: 4px; font-size: 10px; font-weight: bold; padding: 2px 6px; }"
-            "QPushButton:hover { background-color: #38BDF822; border-color: #38BDF8; }"
-        )
         self.btn_header_update.setCursor(Qt.PointingHandCursor)
         self.btn_header_update.clicked.connect(self._open_updater_dialog)
         title_box.addWidget(self.btn_header_update)
@@ -367,6 +363,8 @@ class MainWindow(QMainWindow):
         )
 
     def _on_favorite_app_launch(self, serial: str, package: str, name: str, display_res: str = ""):
+        if not self._check_runtime_installed():
+            return
         session_id = f"{serial}::{package}"
         title = f"[{name}] {serial}"
         
@@ -393,6 +391,8 @@ class MainWindow(QMainWindow):
         self.process_manager.start_session(serial, settings, title, session_id=session_id)
 
     def _on_app_display_launch(self, serial: str, settings: Dict, package: str, title: str):
+        if not self._check_runtime_installed():
+            return
         session_id = f"{serial}::{package}"
         self._append_log("AppLauncher", f"Launching '{package}' in new virtual display window...")
         self.process_manager.start_session(serial, settings, title, session_id=session_id)
@@ -577,7 +577,64 @@ class MainWindow(QMainWindow):
         self._append_log("ADB", f"Disconnected {serial}: {msg or ('OK' if ok else 'Failed')}")
         self._manual_refresh()
 
+    def _update_header_runtime_status(self):
+        """Update header version badge and download/update button styling based on runtime availability."""
+        if self.config.is_scrcpy_installed():
+            scrcpy_version = self.config.get_scrcpy_version()
+            self.lbl_ver.setText(scrcpy_version)
+            self.lbl_ver.setToolTip(f"Active Scrcpy Runtime Version: {scrcpy_version}")
+            self.lbl_ver.setStyleSheet("background-color: #1E222D; color: #38BDF8; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;")
+            self.btn_header_update.setText("🔄 Update")
+            self.btn_header_update.setToolTip("Check for official Scrcpy updates from GitHub")
+            self.btn_header_update.setStyleSheet(
+                "QPushButton { background-color: #1E222D; color: #38BDF8; border: 1px solid #38BDF844; border-radius: 4px; font-size: 10px; font-weight: bold; padding: 2px 6px; }"
+                "QPushButton:hover { background-color: #38BDF822; border-color: #38BDF8; }"
+            )
+        else:
+            self.lbl_ver.setText("🔴 Scrcpy Missing")
+            self.lbl_ver.setToolTip("Scrcpy runtime binaries are not downloaded yet.")
+            self.lbl_ver.setStyleSheet("background-color: #7F1D1D; color: #FCA5A5; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;")
+            self.btn_header_update.setText("⬇️ Download Scrcpy")
+            self.btn_header_update.setToolTip("Download official 64-bit Scrcpy binaries from GitHub")
+            self.btn_header_update.setStyleSheet(
+                "QPushButton { background-color: #0284C7; color: #FFFFFF; border: none; border-radius: 4px; font-size: 10px; font-weight: bold; padding: 2px 8px; }"
+                "QPushButton:hover { background-color: #38BDF8; }"
+            )
+
+    def _check_startup_scrcpy_status(self):
+        """Prompt the user on initial launch if Scrcpy runtime is not downloaded yet."""
+        if not self.config.is_scrcpy_installed():
+            res = QMessageBox.question(
+                self,
+                "Download Scrcpy Runtime",
+                "Scrcpy runtime binaries were not found.\n\n"
+                "Would you like to download the official 64-bit Scrcpy binaries from GitHub now?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if res == QMessageBox.Yes:
+                self._open_updater_dialog()
+
+    def _check_runtime_installed(self) -> bool:
+        """Verify Scrcpy runtime is available before attempting to launch mirroring or ADB actions."""
+        if not self.config.is_scrcpy_installed():
+            res = QMessageBox.question(
+                self,
+                "Scrcpy Runtime Required",
+                "Official Scrcpy runtime binaries are required to perform this action.\n\n"
+                "Would you like to download Scrcpy from GitHub now?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if res == QMessageBox.Yes:
+                self._open_updater_dialog()
+            return False
+        return True
+
     def _launch_device(self, serial: str, extra_override: Optional[Dict] = None):
+        if not self._check_runtime_installed():
+            return
+
         settings = self.stream_panel.get_settings()
         if extra_override:
             settings.update(extra_override)
@@ -614,6 +671,8 @@ class MainWindow(QMainWindow):
         self._on_devices_updated(devs)
 
     def _open_wireless_dialog(self):
+        if not self._check_runtime_installed():
+            return
         dlg = WirelessDialog(self.adb, self.config, self.selected_serial, self)
         dlg.connection_successful.connect(lambda ip: self._manual_refresh())
         dlg.exec()
@@ -680,7 +739,7 @@ class MainWindow(QMainWindow):
         act_refresh = self.tray_menu.addAction("🔄 Refresh Devices")
         act_refresh.triggered.connect(self._manual_refresh)
 
-        act_update = self.tray_menu.addAction("🔄 Check for Scrcpy Updates...")
+        act_update = self.tray_menu.addAction("🔄 Check / Download Scrcpy...")
         act_update.triggered.connect(self._open_updater_dialog)
 
         self.tray_menu.addSeparator()
@@ -695,9 +754,15 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _on_scrcpy_updated(self, new_version: str):
-        self.lbl_ver.setText(new_version)
-        self.lbl_ver.setToolTip(f"Active Scrcpy Runtime Version: {new_version}")
-        self._append_log("Updater", f"Scrcpy runtime upgraded to {new_version}!")
+        self._update_header_runtime_status()
+        bin_dir = self.config.get_scrcpy_bin_dir()
+        self.adb = AdbManager(bin_dir)
+        self.process_manager.scrcpy_dir = bin_dir
+        self.process_manager.scrcpy_bin = bin_dir / "scrcpy.exe"
+        self.process_manager.adb = self.adb
+        self.icon_manager.adb_bin = str(bin_dir / "adb.exe")
+        self._append_log("Updater", f"Scrcpy runtime successfully deployed ({new_version})!")
+        self._start_scanner()
         self._manual_refresh()
 
     def _on_tray_activated(self, reason):
