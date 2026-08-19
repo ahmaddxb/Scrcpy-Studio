@@ -81,12 +81,8 @@ class ScrcpyUpdaterDialog(QDialog):
         row_curr.addWidget(lbl_c_title)
 
         current_ver = self.config.get_scrcpy_version()
-        if not self.config.is_scrcpy_installed():
-            self.lbl_curr_ver = QLabel("Not Downloaded")
-            self.lbl_curr_ver.setStyleSheet("color: #F87171; font-weight: bold; font-size: 13px; font-family: monospace;")
-        else:
-            self.lbl_curr_ver = QLabel(current_ver)
-            self.lbl_curr_ver.setStyleSheet("color: #F8FAFC; font-weight: bold; font-size: 13px; font-family: monospace;")
+        self.lbl_curr_ver = QLabel("")
+        self._update_version_display()
         row_curr.addWidget(self.lbl_curr_ver)
         row_curr.addStretch(1)
         ver_layout.addLayout(row_curr)
@@ -161,6 +157,16 @@ class ScrcpyUpdaterDialog(QDialog):
 
         layout.addLayout(btn_row)
 
+    def _update_version_display(self):
+        """Update the installed version label with matching clean styling."""
+        if self.config.is_scrcpy_installed():
+            current_ver = self.config.get_scrcpy_version()
+            self.lbl_curr_ver.setText(current_ver)
+            self.lbl_curr_ver.setStyleSheet("color: #38BDF8; font-weight: bold; font-size: 13px; font-family: monospace;")
+        else:
+            self.lbl_curr_ver.setText("Not Downloaded")
+            self.lbl_curr_ver.setStyleSheet("color: #F87171; font-weight: bold; font-size: 13px; font-family: monospace;")
+
     def _check_for_updates(self):
         self.btn_check.setEnabled(False)
         self.btn_action.setEnabled(False)
@@ -192,6 +198,8 @@ class ScrcpyUpdaterDialog(QDialog):
         # Render release notes
         body = release_info.get("body", "No release notes provided.")
         self.text_notes.setMarkdown(body)
+
+        self._update_version_display()
 
         is_installed = self.config.is_scrcpy_installed()
         if not is_installed:
@@ -244,11 +252,12 @@ class ScrcpyUpdaterDialog(QDialog):
 
         if success:
             self.progress_bar.setValue(100)
-            new_ver = self.config.get_scrcpy_version()
-            self.lbl_curr_ver.setText(new_ver)
+            self._update_version_display()
             self.badge_status.setText("Up to Date ✓")
             self.badge_status.setStyleSheet("background: #14532D; color: #BBF7D0; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
+            self.btn_action.setText("🔄 Reinstall / Repair Scrcpy")
             self.lbl_progress_status.setText("Update installed successfully!")
+            new_ver = self.config.get_scrcpy_version()
             self.scrcpy_updated.emit(new_ver)
             QMessageBox.information(self, "Scrcpy Updated", f"Scrcpy runtime has been updated successfully to {new_ver}!\n\nLocation: {self.config.get_scrcpy_bin_dir()}")
         else:
