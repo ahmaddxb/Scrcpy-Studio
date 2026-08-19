@@ -1,0 +1,61 @@
+name: Build & Release Scrcpy Studio
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PySide6 pyinstaller
+
+      - name: Download Latest Official Scrcpy Runtime
+        shell: pwsh
+        run: |
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/Genymobile/scrcpy/releases/latest"
+          $asset = $release.assets | Where-Object { $_.name -like "*win64*.zip" } | Select-Object -First 1
+          Write-Host "Downloading Scrcpy: $($asset.name) from $($asset.browser_download_url)..."
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "scrcpy_latest.zip"
+          Expand-Archive -Path "scrcpy_latest.zip" -DestinationPath "temp_scrcpy"
+          $inner = Get-ChildItem -Path "temp_scrcpy" -Directory | Select-Object -First 1
+          Move-Item -Path $inner.FullName -Destination "scrcpy"
+          Remove-Item -Path "scrcpy_latest.zip", "temp_scrcpy" -Recurse -Force
+          Test-Path "scrcpy\scrcpy.exe"
+
+      - name: Package Portable ZIP Release
+        shell: pwsh
+        run: |
+          $ver = if ($env:GITHUB_REF -like "refs/tags/*") { $env:GITHUB_REF -replace "refs/tags/", "" } else { "v1.0.0-beta" }
+          $zipName = "Scrcpy-Studio-Windows-$ver.zip"
+          Compress-Archive -Path "app.py", "run.bat", "core", "ui", "scrcpy", "docs", "README.md", "LICENSE.txt", "TODO.md" -DestinationPath $zipName
+          Write-Host "Created release archive: $zipName"
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Scrcpy-Studio-Windows-*.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true

@@ -1,0 +1,213 @@
+{
+    "scrcpy_path": "Z:\\Github\\Scrcpy-UI\\scrcpy",
+    "theme": "dark",
+    "auto_refresh_interval_ms": 2000,
+    "last_selected_serial": "192.168.1.194:42711",
+    "recent_wireless_ips": [
+        "192.168.1.194:5555",
+        "192.168.1.194:42711"
+    ],
+    "active_preset": "Balanced (1080p 60fps 8M)",
+    "presets": {
+        "Balanced (1080p 60fps 8M)": {
+            "max_size": "1920",
+            "bitrate": "8M",
+            "max_fps": "60",
+            "video_codec": "h264",
+            "audio_enabled": true,
+            "audio_codec": "opus",
+            "audio_dup": false,
+            "stay_awake": true,
+            "turn_screen_off": false,
+            "show_touches": false,
+            "always_on_top": false,
+            "fullscreen": false,
+            "borderless": false,
+            "record": false,
+            "record_format": "mp4",
+            "sync_clipboard": true,
+            "otg_mode": false,
+            "camera_mode": false
+        },
+        "High Quality (1440p 60fps 16M)": {
+            "max_size": "2560",
+            "bitrate": "16M",
+            "max_fps": "60",
+            "video_codec": "h265",
+            "audio_enabled": true,
+            "audio_codec": "opus",
+            "audio_dup": false,
+            "stay_awake": true,
+            "turn_screen_off": false,
+            "show_touches": false,
+            "always_on_top": false,
+            "fullscreen": false,
+            "borderless": false,
+            "record": false,
+            "record_format": "mp4",
+            "sync_clipboard": true,
+            "otg_mode": false,
+            "camera_mode": false
+        },
+        "Low Latency / Gaming (720p 90fps 6M)": {
+            "max_size": "1280",
+            "bitrate": "6M",
+            "max_fps": "90",
+            "video_codec": "h264",
+            "audio_enabled": true,
+            "audio_codec": "raw",
+            "audio_dup": false,
+            "stay_awake": true,
+            "turn_screen_off": true,
+            "show_touches": false,
+            "always_on_top": true,
+            "fullscreen": false,
+            "borderless": false,
+            "record": false,
+            "record_format": "mp4",
+            "sync_clipboard": true,
+            "otg_mode": false,
+            "camera_mode": false
+        },
+        "Audio Only Stream": {
+            "max_size": "0",
+            "bitrate": "0",
+            "max_fps": "0",
+            "video_codec": "h264",
+            "audio_enabled": true,
+            "audio_codec": "opus",
+            "audio_dup": false,
+            "stay_awake": false,
+            "turn_screen_off": false,
+            "show_touches": false,
+            "always_on_top": false,
+            "fullscreen": false,
+            "borderless": false,
+            "record": false,
+            "record_format": "mp4",
+            "sync_clipboard": false,
+            "otg_mode": false,
+            "camera_mode": false,
+            "no_video": true
+        }
+    },
+    "current_settings": {
+        "max_size": "1920",
+        "bitrate": "8M",
+        "max_fps": "60",
+        "video_codec": "h264",
+        "audio_enabled": true,
+        "audio_codec": "opus",
+        "audio_dup": false,
+        "stay_awake": true,
+        "force_stay_awake": true,
+        "turn_screen_off": true,
+        "show_touches": false,
+        "always_on_top": false,
+        "fullscreen": false,
+        "borderless": false,
+        "record": false,
+        "record_format": "mp4",
+        "record_path": "",
+        "sync_clipboard": true,
+        "otg_mode": false,
+        "camera_mode": false,
+        "no_video": false,
+        "rotation": "0",
+        "window_width": "540",
+        "window_height": "1140",
+        "window_x": "",
+        "window_y": "",
+        "custom_args": ""
+    },
+    "pinned_devices": [
+        {
+            "serial": "192.168.1.194:5555",
+            "name": "SM S938B",
+            "is_wireless": true
+        }
+    ],
+    "app_launcher_disp_res": "1080x2316",
+    "virtual_display_presets": [
+        {
+            "label": "\ud83d\udcf1 Native Resolution (Auto)",
+            "value": ""
+        },
+        {
+            "label": "\ud83d\udcf1 1080x1920 (1080x1920 \u2192 450x965 win)",
+            "value": "1080x1920",
+            "win_w": "450",
+            "win_h": "965"
+        },
+        {
+            "label": "\ud83d\udcbb 1920x1080 (FHD Landscape / DeX)",
+            "value": "1920x1080"
+        },
+        {
+            "label": "\ud83d\udcf1 720x1280 (Compact Portrait)",
+            "value": "720x1280"
+        },
+        {
+            "label": "\ud83d\udcbb 1280x720 (Compact Landscape)",
+            "value": "1280x720"
+        },
+        {
+            "label": "\ud83d\udcf1 1440x2560 (2K Ultra Portrait)",
+            "value": "1440x2560"
+        },
+        {
+            "label": "\ud83d\udcbb 2560x1440 (2K Ultra Landscape)",
+            "value": "2560x1440"
+        },
+        {
+            "label": "\ud83d\udcf1 Ahmad (1080x2316 \u2192 450x965 win)",
+            "value": "1080x2316",
+            "win_w": "450",
+            "win_h": "965"
+        }
+    ],
+    "favorite_apps": [
+        {
+            "name": "Financisto",
+            "package": "tw.tib.financisto",
+            "icon": "\ud83d\udcf1",
+            "display_res": "1080x2316"
+        },
+        {
+            "name": "ENBD",
+            "package": "com.emiratesnbd.android",
+            "icon": "\ud83d\udcf1",
+            "display_res": "1080x2316"
+        },
+        {
+            "name": "EIB",
+            "package": "com.emiratesislamic.android",
+            "icon": "\ud83d\udcf1",
+            "display_res": "1080x2316"
+        },
+        {
+            "name": "DIB",
+            "package": "com.dib.app",
+            "icon": "\ud83d\udcf1",
+            "display_res": "1080x2316"
+        },
+        {
+            "name": "Mashreq",
+            "package": "com.vipera.ts.starter.MashreqAE",
+            "icon": "\ud83d\udcf1",
+            "display_res": "1080x2316"
+        },
+        {
+            "name": "WIO",
+            "package": "io.wio.retail",
+            "icon": "\ud83d\udcf1",
+            "display_res": "1080x2316"
+        },
+        {
+            "name": "Casbback",
+            "package": "com.cashback.tracker",
+            "icon": "\ud83d\udcf1",
+            "display_res": "1080x2316"
+        }
+    ]
+}

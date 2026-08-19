@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Distribution / packaging / build
+dist/
+build/
+*.egg-info/
+*.spec
+
+# Backups & Local temporary files
+backups/
+*.tmp
+*.log
+
+# Caches & Local runtime data
+data/icons/
+!data/icons/.gitkeep
+data/config.json
+
+# Gemini / Antigravity workspace files
+.gemini/
+
+# IDE / Editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Scrcpy binary runtime (downloaded on demand or bundled locally)
+scrcpy/
+scrcpy-win64-*/
