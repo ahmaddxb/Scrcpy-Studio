@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Tuple
 
 from PySide6.QtCore import QObject, QThread, Signal
 
+from core.config_manager import get_project_root
+
 
 @dataclass
 class AdbDevice:
