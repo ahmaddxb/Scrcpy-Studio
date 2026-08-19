@@ -10,8 +10,11 @@ build/
 *.egg-info/
 *.spec
 
-# Backups & Local temporary files
+# Backups, local scripts & Temporary files
 backups/
+scripts/
+run.bat
+*.bat
 *.tmp
 *.log
 

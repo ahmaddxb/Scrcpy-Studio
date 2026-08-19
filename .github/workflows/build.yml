@@ -70,7 +70,7 @@ jobs:
               "v1.0.0-beta"
           }
           $zipName = "Scrcpy-Studio-Windows-$ver.zip"
-          Compress-Archive -Path "app.py", "run.bat", "core", "ui", "scrcpy", "docs", "README.md", "LICENSE.txt" -DestinationPath $zipName
+          Compress-Archive -Path "app.py", "core", "ui", "scrcpy", "docs", "README.md", "LICENSE.txt" -DestinationPath $zipName
           Write-Host "Created release archive: $zipName"
 
       - name: Create GitHub Release
