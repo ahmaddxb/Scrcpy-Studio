@@ -15,10 +15,10 @@ This document tracks planned features, enhancements, and deployment tasks for Sc
   - Package application using PyInstaller or Nuitka with embedded PySide6, bundled  icons, and theme assets.
   - Create single-click build script (`build_exe.bat`).
   - Ensure portable zero-dependency execution on any Windows 10/11 PC.
-- [ ] **Push to GitHub**:
-  - Initialize clean `.gitignore` (ignore `__pycache__`, `data/icons/`, `build/`, `dist/`, `.gemini/`).
-  - Push codebase, documentation, and assets to GitHub repository.
-  - Set up GitHub Actions or automated release pipeline for downloadable Windows releases.
+- [x] **Push to GitHub**:
+  - Initialize clean `.gitignore` (ignore `__pycache__`, `data/icons/`, `build/`, `dist/`, `.gemini/`, `backups/`).
+  - Initialize git repository and create initial commit.
+  - Set up GitHub Actions CI/CD release workflow (`.github/workflows/build.yml`).
 
 ---
 
