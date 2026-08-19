@@ -19,6 +19,7 @@ backups/
 data/icons/
 !data/icons/.gitkeep
 data/config.json
+config.json
 
 # Gemini / Antigravity workspace files
 .gemini/

@@ -12,7 +12,7 @@ This document is the **single source of truth** for AI agents, developers, and f
 * **GUI Framework**: PySide6 (Qt 6.x) with custom dark theme stylesheets (`QSS`)
 * **Bundled Binaries**: Scrcpy v4.1 (64-bit Windows) located at [`scrcpy/`](file:///z:/Github/Scrcpy-UI/scrcpy/)
 * **Platform**: Windows 10 / 11 (Supports standalone `.exe` distribution and `.bat` runners)
-* **Target / Test Device**: Samsung Galaxy S25 Ultra (`SM_S938B`) on `192.168.1.194:5555`
+* **Target / Test Device**: Samsung Galaxy S25 Ultra (`SM_S938B`) on `192.168.1.x:5555`
 
 ---
 
@@ -66,7 +66,7 @@ z:/Github/Scrcpy-UI/
 ### A. Independent Virtual Displays & PC Window Sizing
 Scrcpy v4.1 allows creating independent virtual displays with standalone PC window geometry:
 ```bash
-scrcpy -s 192.168.1.194:5555 --new-display=1080x2316/420 --window-width=450 --window-height=965 --start-app=tw.tib.financisto
+scrcpy -s 192.168.1.100:5555 --new-display=1080x2316/420 --window-width=450 --window-height=965 --start-app=tw.tib.financisto
 ```
 * **Virtual Display Presets**: Stored in `config.json` under `virtual_display_presets` with fields: `id`, `label`, `value` (`WIDTHxHEIGHT/DPI`), `win_w` (PC window width), and `win_h` (PC window height).
 * Configurable globally in **App Launcher** and individually per favorite app in **Favorite Apps Bar**.
