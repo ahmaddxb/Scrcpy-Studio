@@ -343,6 +343,7 @@ class MainWindow(QMainWindow):
         # Favorite Apps Bar
         self.favorites_bar.launch_app_requested.connect(self._on_favorite_app_launch)
         self.favorites_bar.open_apps_manager_requested.connect(lambda: self._switch_page(1))
+        self.favorites_bar.pin_injector_requested.connect(self._open_pin_injector_dialog)
 
         # Quick actions
         self.quick_actions.action_triggered.connect(
@@ -350,6 +351,7 @@ class MainWindow(QMainWindow):
         )
         self.quick_actions.disconnect_requested.connect(self._on_disconnect_device)
         self.quick_actions.open_apps_requested.connect(lambda: self._switch_page(1))
+        self.quick_actions.pin_injector_requested.connect(self._open_pin_injector_dialog)
 
         # Drop zone
         self.drop_zone.status_message.connect(
@@ -537,6 +539,14 @@ class MainWindow(QMainWindow):
         dev = self.devices.get(serial)
         dlg = DeviceProfileDialog(serial, self.config, dev, self)
         dlg.profile_saved.connect(self._on_device_profile_saved)
+        dlg.exec()
+
+    def _open_pin_injector_dialog(self, serial: str):
+        from ui.components.pin_injector_dialog import PinInjectorDialog
+        dev = self.devices.get(serial)
+        name = self.config.get_device_alias(serial, dev.display_name if dev else serial)
+        dlg = PinInjectorDialog(serial, self.adb, device_name=name, parent=self)
+        dlg.pin_injected.connect(lambda s, msg: self._append_log("PIN_Injector", msg))
         dlg.exec()
 
     def _on_device_profile_saved(self, serial: str):

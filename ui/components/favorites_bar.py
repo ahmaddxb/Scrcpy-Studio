@@ -159,6 +159,7 @@ class FavoriteAppsBar(QFrame):
 
     launch_app_requested = Signal(str, str, str, str)  # serial, package_name, display_name, display_res
     open_apps_manager_requested = Signal()
+    pin_injector_requested = Signal(str)  # serial
 
     def __init__(self, config: ConfigManager, adb: AdbManager, parent=None):
         super().__init__(parent)
@@ -439,12 +440,16 @@ class FavoriteAppsBar(QFrame):
             act_p.triggered.connect(lambda _, v=p_val: self._set_fav_preset(package, name, fav.get("icon", "📱"), v))
 
         menu.addSeparator()
+        act_inject_pin = menu.addAction("🔑 Inject PIN / Password into App...")
         act_shortcut = menu.addAction("📌 Create Desktop Shortcut (.lnk)")
         act_remove = menu.addAction("🗑 Remove from Favorites")
 
         action = menu.exec(source_btn.mapToGlobal(pos))
         if action == act_launch:
             self._on_chip_clicked(package, name, cur_res)
+        elif action == act_inject_pin:
+            if self.selected_serial:
+                self.pin_injector_requested.emit(self.selected_serial)
         elif action == act_reextract:
             self.icon_manager.get_icon(package, self.selected_serial, force_refresh=True)
         elif action == act_web_icon:

@@ -207,6 +207,21 @@ class AdbManager:
         code, _, _ = self._run_cmd(["-s", serial, "shell", "input", "keyevent", str(keycode)], timeout=3)
         return code == 0
 
+    def send_text(self, serial: str, text: str) -> bool:
+        """Send alphanumeric text/PIN to active focused window via ADB."""
+        if not text:
+            return False
+        escaped_text = (
+            text.replace(" ", "%s")
+            .replace("&", "\\&")
+            .replace("<", "\\<")
+            .replace(">", "\\>")
+            .replace("(", "\\(")
+            .replace(")", "\\)")
+        )
+        code, _, _ = self._run_cmd(["-s", serial, "shell", "input", "text", escaped_text], timeout=4)
+        return code == 0
+
     def wake_up(self, serial: str) -> bool:
         """Wake up device screen (KEYCODE_WAKEUP = 224)."""
         return self.send_keyevent(serial, 224)
