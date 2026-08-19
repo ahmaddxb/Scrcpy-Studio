@@ -26,10 +26,11 @@ class QuickActionBar(QFrame):
     action_triggered = Signal(str, str)  # action_name, message
     open_apps_requested = Signal()
 
-    def __init__(self, adb: AdbManager, config: Optional[ConfigManager] = None, parent=None):
+    def __init__(self, adb: AdbManager, config: Optional[ConfigManager] = None, process_manager=None, parent=None):
         super().__init__(parent)
         self.adb = adb
         self.config = config
+        self.process_manager = process_manager
         self.selected_serial: Optional[str] = None
 
         self.setObjectName("quickActionsCard")
@@ -141,8 +142,8 @@ class QuickActionBar(QFrame):
 
         # Row 2: Utilities (Screenshot, Screen On, Screen Off, Apps)
         self.btn_screenshot = self._create_btn("📸 Screenshot", self._take_screenshot)
-        self.btn_screen_on = self._create_btn("💡 Screen On", lambda: self._send_key(224, "Screen On"))
-        self.btn_screen_off = self._create_btn("🌑 Screen Off", lambda: self._send_key(223, "Screen Off"))
+        self.btn_screen_on = self._create_btn("💡 Screen On", self._turn_screen_on)
+        self.btn_screen_off = self._create_btn("🌑 Screen Off", self._turn_screen_off)
         self.btn_apps = self._create_btn("📱 Apps", lambda: self.open_apps_requested.emit())
 
         grid.addWidget(self.btn_screenshot, 2, 0)
@@ -151,6 +152,27 @@ class QuickActionBar(QFrame):
         grid.addWidget(self.btn_apps, 2, 3)
 
         main_layout.addWidget(self.body_widget)
+
+    def _turn_screen_on(self):
+        if not self.selected_serial:
+            return
+        scrcpy_ok = False
+        if self.process_manager:
+            scrcpy_ok = self.process_manager.send_scrcpy_shortcut(self.selected_serial, "screen_on")
+        self.adb.wake_up(self.selected_serial)
+        mode = "Scrcpy Live Display Mode" if scrcpy_ok else "ADB Keyevent"
+        self.action_triggered.emit("Screen On", f"Turned on physical display for {self.selected_serial} via {mode}")
+
+    def _turn_screen_off(self):
+        if not self.selected_serial:
+            return
+        scrcpy_ok = False
+        if self.process_manager:
+            scrcpy_ok = self.process_manager.send_scrcpy_shortcut(self.selected_serial, "screen_off")
+        if not scrcpy_ok:
+            self.adb.turn_off_screen(self.selected_serial)
+        mode = "Scrcpy Live Display Mode (keeps mirroring active)" if scrcpy_ok else "ADB Keyevent (Sleep)"
+        self.action_triggered.emit("Screen Off", f"Turned off physical display for {self.selected_serial} via {mode}")
 
     def _unlock_device(self):
         if not self.selected_serial:

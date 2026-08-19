@@ -247,7 +247,7 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.favorites_bar, 0)
 
         # Quick Actions Bar
-        self.quick_actions = QuickActionBar(self.adb, self.config)
+        self.quick_actions = QuickActionBar(self.adb, self.config, self.process_manager)
         left_layout.addWidget(self.quick_actions, 0)
 
         # Drag & Drop Zone

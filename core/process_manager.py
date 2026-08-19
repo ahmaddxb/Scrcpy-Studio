@@ -296,3 +296,60 @@ class ProcessManager(QObject):
         self._restore_timeout(dev_serial)
         self.session_stopped.emit(key, exit_code)
         self.log_output.emit(key, f"[STOPPED] Process exited with code {exit_code}")
+
+    def send_scrcpy_shortcut(self, serial: str, action: str = "screen_off") -> bool:
+        """
+        Send Scrcpy native live shortcut to active mirroring window.
+        - 'screen_off': Alt + O (MOD + o -> SurfaceControl.POWER_MODE_OFF, keeps mirroring alive)
+        - 'screen_on': Alt + Shift + O (MOD + Shift + o -> SurfaceControl.POWER_MODE_NORMAL)
+        """
+        if os.name != "nt":
+            return False
+
+        try:
+            import ctypes
+            from ctypes import wintypes
+            user32 = ctypes.windll.user32
+
+            matching_hwnds = []
+
+            def enum_cb(hwnd, lparam):
+                if user32.IsWindowVisible(hwnd):
+                    length = user32.GetWindowTextLengthW(hwnd)
+                    if length > 0:
+                        buff = ctypes.create_unicode_buffer(length + 1)
+                        user32.GetWindowTextW(hwnd, buff, length + 1)
+                        title = buff.value
+                        if "Scrcpy" in title and (not serial or serial in title or ":" in title):
+                            matching_hwnds.append(hwnd)
+                return True
+
+            ENUM_WIN_PROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+            user32.EnumWindows(ENUM_WIN_PROC(enum_cb), 0)
+
+            if matching_hwnds:
+                VK_MENU = 0x12     # Alt
+                VK_SHIFT = 0x10    # Shift
+                VK_O = 0x4F        # 'O'
+                KEYEVENTF_KEYUP = 0x0002
+
+                for hwnd in matching_hwnds:
+                    user32.SetForegroundWindow(hwnd)
+                    if action == "screen_on":
+                        # Alt + Shift + O
+                        user32.keybd_event(VK_MENU, 0, 0, 0)
+                        user32.keybd_event(VK_SHIFT, 0, 0, 0)
+                        user32.keybd_event(VK_O, 0, 0, 0)
+                        user32.keybd_event(VK_O, 0, KEYEVENTF_KEYUP, 0)
+                        user32.keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0)
+                        user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+                    else:
+                        # Alt + O (Screen Off)
+                        user32.keybd_event(VK_MENU, 0, 0, 0)
+                        user32.keybd_event(VK_O, 0, 0, 0)
+                        user32.keybd_event(VK_O, 0, KEYEVENTF_KEYUP, 0)
+                        user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+                return True
+        except Exception:
+            pass
+        return False
