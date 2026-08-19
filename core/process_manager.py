@@ -27,6 +27,7 @@ class ProcessManager(QObject):
 
     session_started = Signal(str)  # serial
     session_stopped = Signal(str, int)  # serial, exit_code
+    display_id_ready = Signal(str, int)  # session_key, display_id
     log_output = Signal(str, str)  # serial, message
     error_occurred = Signal(str, str)  # serial, error_msg
 
@@ -292,7 +293,9 @@ class ProcessManager(QObject):
         if m:
             disp_id = int(m.group(1))
             if key in self.sessions:
-                self.sessions[key].display_id = disp_id
+                if self.sessions[key].display_id != disp_id:
+                    self.sessions[key].display_id = disp_id
+                    self.display_id_ready.emit(key, disp_id)
 
     def get_active_display_id(self, key_or_serial: str) -> Optional[int]:
         """Get the active virtual display ID for a given session key or device serial."""

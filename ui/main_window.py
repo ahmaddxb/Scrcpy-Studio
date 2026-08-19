@@ -53,6 +53,7 @@ class MainWindow(QMainWindow):
         self.devices: Dict[str, AdbDevice] = {}
         self.selected_serial: Optional[str] = None
         self.card_widgets: Dict[str, DeviceCard] = {}
+        self.pending_app_transfers: Dict[str, Tuple[str, str, str]] = {}
 
         self.setWindowTitle("Scrcpy Studio — Android Control & Mirroring")
         self.resize(1220, 820)
@@ -379,6 +380,7 @@ class MainWindow(QMainWindow):
         # Process manager signals
         self.process_manager.session_started.connect(self._on_session_started)
         self.process_manager.session_stopped.connect(self._on_session_stopped)
+        self.process_manager.display_id_ready.connect(self._on_virtual_display_id_ready)
         self.process_manager.log_output.connect(
             lambda serial, msg: self._append_log(f"Scrcpy:{serial}", msg)
         )
@@ -431,11 +433,43 @@ class MainWindow(QMainWindow):
         if active_disp_id is not None:
             ok, msg = self.adb.move_app_to_display(serial, package, active_disp_id)
             status = "Success" if ok else "Notice"
-            self._append_log("AppTransfer", f"[{status}] Transferred running '{name}' to Virtual Display #{active_disp_id}: {msg}")
+            self._append_log("AppTransfer", f"[{status}] {msg}")
         else:
-            # No virtual display running yet: launch the virtual display window with this app!
-            self._append_log("AppTransfer", f"Opening Virtual Display for '{name}' and pulling running task from phone...")
-            self._on_favorite_app_launch(serial, package, name, display_res)
+            # No virtual display running yet: Open dedicated Virtual Display FIRST (WITHOUT --start-app so it doesn't cold-start!)
+            self._append_log("AppTransfer", f"Opening dedicated Virtual Display window for '{name}' (awaiting display ID)...")
+            self.pending_app_transfers[session_id] = (serial, package, name)
+
+            res = display_res if display_res else self.config.get("app_launcher_disp_res", "")
+            title = f"[{name}] {serial}"
+            settings = {
+                "new_display": True,
+                "new_display_res": res,
+                "stay_awake": True,
+                "force_stay_awake": True,
+                "sync_clipboard": True,
+                # Explicitly NO start_app so it pulls the existing task!
+            }
+            if res:
+                preset = self.config.get_preset_by_value(res)
+                if preset:
+                    if preset.get("win_w"):
+                        settings["window_width"] = preset["win_w"]
+                    if preset.get("win_h"):
+                        settings["window_height"] = preset["win_h"]
+
+            self.process_manager.start_session(serial, settings, title, session_id=session_id)
+
+    def _on_virtual_display_id_ready(self, session_key: str, display_id: int):
+        if session_key in self.pending_app_transfers:
+            serial, package, name = self.pending_app_transfers.pop(session_key)
+            self._append_log("AppTransfer", f"Virtual Display #{display_id} is ready! Moving live authenticated '{name}' from phone...")
+            # 200ms delay to let SurfaceFlinger finish window composition
+            QTimer.singleShot(200, lambda: self._do_transfer(serial, package, name, display_id))
+
+    def _do_transfer(self, serial: str, package: str, name: str, display_id: int):
+        ok, msg = self.adb.move_app_to_display(serial, package, display_id)
+        status = "Success" if ok else "Notice"
+        self._append_log("AppTransfer", f"[{status}] {msg}")
 
     def _on_app_display_launch(self, serial: str, settings: Dict, package: str, title: str):
         if not self._check_runtime_installed():
