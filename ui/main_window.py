@@ -34,6 +34,7 @@ from ui.components.drop_zone import DropZoneWidget
 from ui.components.favorites_bar import FavoriteAppsBar
 from ui.components.log_viewer import LogViewer
 from ui.components.quick_actions import QuickActionBar
+from ui.components.settings_panel import SettingsPanel
 from ui.components.stream_panel import StreamPanel
 from ui.components.wireless_dialog import WirelessDialog
 
@@ -109,14 +110,14 @@ class MainWindow(QMainWindow):
 
         header_layout.addSpacing(16)
 
-        # Top Navigation Pill Bar
+        # Top Navigation Segmented Tab Bar
         nav_box = QFrame()
         nav_box.setStyleSheet("background-color: #111319; border-radius: 8px; border: 1px solid #232734; padding: 2px;")
         nav_layout = QHBoxLayout(nav_box)
         nav_layout.setContentsMargins(4, 2, 4, 2)
         nav_layout.setSpacing(4)
 
-        self.nav_btn_mirror = QPushButton("🎮 Mirroring Studio")
+        self.nav_btn_mirror = QPushButton("🎮 Mirroring")
         self.nav_btn_mirror.setProperty("class", "navPill")
         self.nav_btn_mirror.setCursor(Qt.PointingHandCursor)
         self.nav_btn_mirror.clicked.connect(lambda: self._switch_page(0))
@@ -128,11 +129,23 @@ class MainWindow(QMainWindow):
         self.nav_btn_apps.clicked.connect(lambda: self._switch_page(1))
         nav_layout.addWidget(self.nav_btn_apps)
 
-        self.nav_btn_console = QPushButton("💉 ADB Console & Logs")
+        self.nav_btn_console = QPushButton("💻 ADB Console")
         self.nav_btn_console.setProperty("class", "navPill")
         self.nav_btn_console.setCursor(Qt.PointingHandCursor)
         self.nav_btn_console.clicked.connect(lambda: self._switch_page(2))
         nav_layout.addWidget(self.nav_btn_console)
+
+        self.nav_btn_logs = QPushButton("📋 Logs")
+        self.nav_btn_logs.setProperty("class", "navPill")
+        self.nav_btn_logs.setCursor(Qt.PointingHandCursor)
+        self.nav_btn_logs.clicked.connect(lambda: self._switch_page(3))
+        nav_layout.addWidget(self.nav_btn_logs)
+
+        self.nav_btn_settings = QPushButton("⚙️ Settings")
+        self.nav_btn_settings.setProperty("class", "navPill")
+        self.nav_btn_settings.setCursor(Qt.PointingHandCursor)
+        self.nav_btn_settings.clicked.connect(lambda: self._switch_page(4))
+        nav_layout.addWidget(self.nav_btn_settings)
 
         header_layout.addWidget(nav_box)
 
@@ -269,26 +282,25 @@ class MainWindow(QMainWindow):
         self.app_launcher = AppLauncherWidget(self.adb, self.config)
         self.main_stack.addWidget(self.app_launcher)
 
-        # --- PAGE 2: 💉 FULL-SIZE ADB CONSOLE & LOGS ---
+        # --- PAGE 2: 💻 FULL-SIZE ADB COMMAND INJECTOR & CONSOLE ---
         page_console = QWidget()
         l_page_console = QVBoxLayout(page_console)
         l_page_console.setContentsMargins(0, 0, 0, 0)
-        l_page_console.setSpacing(8)
-
-        console_splitter = QSplitter(Qt.Vertical)
-        console_splitter.setStyleSheet("QSplitter::handle { background-color: #21242D; height: 3px; }")
-
         self.command_injector = CommandInjectorWidget(self.adb)
-        console_splitter.addWidget(self.command_injector)
-
-        # Full-height dedicated log viewer on Console page
-        self.log_viewer = LogViewer()
-        console_splitter.addWidget(self.log_viewer)
-        console_splitter.setStretchFactor(0, 5)
-        console_splitter.setStretchFactor(1, 5)
-
-        l_page_console.addWidget(console_splitter)
+        l_page_console.addWidget(self.command_injector)
         self.main_stack.addWidget(page_console)
+
+        # --- PAGE 3: 📋 DEDICATED SYSTEM LOGS VIEWER ---
+        page_logs = QWidget()
+        l_page_logs = QVBoxLayout(page_logs)
+        l_page_logs.setContentsMargins(0, 0, 0, 0)
+        self.log_viewer = LogViewer()
+        l_page_logs.addWidget(self.log_viewer)
+        self.main_stack.addWidget(page_logs)
+
+        # --- PAGE 4: ⚙️ SETTINGS PANEL ---
+        self.settings_panel = SettingsPanel(self.config)
+        self.main_stack.addWidget(self.settings_panel)
 
         root_layout.addWidget(self.main_stack, 1)
 
@@ -306,12 +318,20 @@ class MainWindow(QMainWindow):
 
     def _switch_page(self, index: int):
         self.main_stack.setCurrentIndex(index)
-        self.nav_btn_mirror.setProperty("selected", str(index == 0).lower())
-        self.nav_btn_apps.setProperty("selected", str(index == 1).lower())
-        self.nav_btn_console.setProperty("selected", str(index == 2).lower())
-        for b in [self.nav_btn_mirror, self.nav_btn_apps, self.nav_btn_console]:
+        buttons = [
+            self.nav_btn_mirror,
+            self.nav_btn_apps,
+            self.nav_btn_console,
+            self.nav_btn_logs,
+            self.nav_btn_settings,
+        ]
+        for i, b in enumerate(buttons):
+            b.setProperty("selected", str(i == index).lower())
             b.style().unpolish(b)
             b.style().polish(b)
+
+        if index == 4:
+            self.settings_panel.load_settings()
 
     def _append_log(self, source: str, msg: str):
         self.log_viewer_mini.append_log(source, msg)
@@ -353,6 +373,11 @@ class MainWindow(QMainWindow):
         )
         self.app_launcher.app_display_launch_requested.connect(self._on_app_display_launch)
         self.app_launcher.favorite_toggled.connect(self.favorites_bar.refresh_favorites)
+
+        # Settings panel
+        self.settings_panel.runtime_update_requested.connect(self._open_updater_dialog)
+        self.settings_panel.refresh_rate_changed.connect(self._on_refresh_rate_changed)
+        self.settings_panel.settings_changed.connect(self._save_settings)
 
         # Process manager signals
         self.process_manager.session_started.connect(self._on_session_started)
@@ -830,6 +855,11 @@ class MainWindow(QMainWindow):
         self.activateWindow()
         self.raise_()
 
+    def _on_refresh_rate_changed(self, interval_ms: int):
+        if hasattr(self, "scanner"):
+            self.scanner.interval_ms = interval_ms
+            self._append_log("System", f"Device scan interval updated to {interval_ms} ms")
+
     def _force_quit(self):
         self._append_log("System", "Quitting Scrcpy Studio...")
         self.tray_icon.hide()
@@ -840,11 +870,12 @@ class MainWindow(QMainWindow):
         QApplication.quit()
 
     def closeEvent(self, event):
-        # Minimize to tray instead of abruptly closing
-        if self.tray_icon.isVisible():
+        close_to_tray = self.config.get("close_to_tray", True)
+        if close_to_tray and self.tray_icon.isVisible():
             event.ignore()
             self.hide()
-            if not getattr(self, "_tray_notified", False):
+            notify_enabled = self.config.get("notifications_enabled", True)
+            if notify_enabled and not getattr(self, "_tray_notified", False):
                 self._tray_notified = True
                 self.tray_icon.showMessage(
                     "Scrcpy Studio",

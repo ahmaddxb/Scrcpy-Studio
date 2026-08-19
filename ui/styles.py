@@ -154,26 +154,27 @@ QPushButton.quickAction:hover {
     color: #60A5FA;
 }
 
-/* Top Navigation Pill Buttons */
+/* Top Navigation Segmented Tab Control */
 QPushButton.navPill {
     background-color: transparent;
     color: #94A3B8;
     border: 1px solid transparent;
     border-radius: 6px;
-    padding: 6px 14px;
+    padding: 5px 12px;
     font-size: 12px;
     font-weight: 600;
 }
 
 QPushButton.navPill:hover {
-    background-color: #21242D;
-    color: #F1F5F9;
+    background-color: #1E222E;
+    color: #F8FAFC;
 }
 
 QPushButton.navPill[selected="true"] {
-    background-color: #222735;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1E293B, stop:1 #131A29);
     color: #38BDF8;
-    border: 1px solid #3B82F6;
+    border: 1px solid #0284C7;
+    font-weight: 700;
 }
 
 /* Combo Boxes */

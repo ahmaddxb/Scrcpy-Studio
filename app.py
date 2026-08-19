@@ -37,7 +37,12 @@ def main():
 
     config = ConfigManager()
     window = MainWindow(config)
-    window.show()
+    
+    if "--minimized" in sys.argv or "-m" in sys.argv:
+        # Start minimized to system tray
+        pass
+    else:
+        window.show()
 
     sys.exit(app.exec())
 
