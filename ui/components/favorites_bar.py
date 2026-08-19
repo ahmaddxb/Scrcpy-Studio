@@ -159,6 +159,7 @@ class FavoriteAppsBar(QFrame):
 
     launch_app_requested = Signal(str, str, str, str)  # serial, package_name, display_name, display_res
     move_app_requested = Signal(str, str, str, str)  # serial, package_name, display_name, display_res
+    pull_active_app_requested = Signal(str)  # serial
     open_apps_manager_requested = Signal()
 
     def __init__(self, config: ConfigManager, adb: AdbManager, parent=None):
@@ -210,12 +211,14 @@ class FavoriteAppsBar(QFrame):
         should_show = self.is_pinned_expanded or self.underMouse()
         self.scroll_area.setVisible(should_show)
         self.btn_add_fav.setVisible(should_show)
+        self.btn_pull_phone.setVisible(should_show)
         self.btn_more.setVisible(should_show)
 
     def enterEvent(self, event):
         if not self.is_pinned_expanded:
             self.scroll_area.setVisible(True)
             self.btn_add_fav.setVisible(True)
+            self.btn_pull_phone.setVisible(True)
             self.btn_more.setVisible(True)
         super().enterEvent(event)
 
@@ -223,6 +226,7 @@ class FavoriteAppsBar(QFrame):
         if not self.is_pinned_expanded:
             self.scroll_area.setVisible(False)
             self.btn_add_fav.setVisible(False)
+            self.btn_pull_phone.setVisible(False)
             self.btn_more.setVisible(False)
         super().leaveEvent(event)
 
@@ -264,6 +268,17 @@ class FavoriteAppsBar(QFrame):
         lbl_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #38BDF8; border: none;")
         header_row.addWidget(lbl_title)
         header_row.addStretch(1)
+
+        self.btn_pull_phone = QPushButton("🔀 Move to PC")
+        self.btn_pull_phone.setToolTip("Detect whatever app is open on the phone and move it to a PC Virtual Display window")
+        self.btn_pull_phone.setFixedHeight(22)
+        self.btn_pull_phone.setStyleSheet(
+            "QPushButton { background: #1E293B; color: #38BDF8; border: 1px solid #38BDF844; border-radius: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; }"
+            "QPushButton:hover { background: #0284C7; color: #FFFFFF; border-color: #38BDF8; }"
+        )
+        self.btn_pull_phone.setCursor(Qt.PointingHandCursor)
+        self.btn_pull_phone.clicked.connect(self._on_pull_phone_clicked)
+        header_row.addWidget(self.btn_pull_phone)
 
         self.btn_add_fav = QPushButton("＋ Add")
         self.btn_add_fav.setToolTip("Add custom app to favorites")
@@ -322,6 +337,11 @@ class FavoriteAppsBar(QFrame):
         self.main_layout.addWidget(self.scroll_area)
 
         self.refresh_favorites()
+
+    def _on_pull_phone_clicked(self):
+        if not self.selected_serial:
+            return
+        self.pull_active_app_requested.emit(self.selected_serial)
 
     def refresh_favorites(self):
         """Re-render favorite app buttons."""

@@ -25,6 +25,7 @@ class QuickActionBar(QFrame):
 
     action_triggered = Signal(str, str)  # action_name, message
     open_apps_requested = Signal()
+    pull_active_app_requested = Signal(str)  # serial
 
     def __init__(self, adb: AdbManager, config: Optional[ConfigManager] = None, process_manager=None, parent=None):
         super().__init__(parent)
@@ -140,18 +141,24 @@ class QuickActionBar(QFrame):
         grid.addWidget(self.btn_app_switch, 1, 2)
         grid.addWidget(self.btn_notif, 1, 3)
 
-        # Row 2: Utilities (Screenshot, Screen On, Screen Off, Apps)
+        # Row 2: Utilities (Screenshot, Screen On, Screen Off, Move to PC)
         self.btn_screenshot = self._create_btn("📸 Screenshot", self._take_screenshot)
         self.btn_screen_on = self._create_btn("💡 Screen On", self._turn_screen_on)
         self.btn_screen_off = self._create_btn("🌑 Screen Off", self._turn_screen_off)
-        self.btn_apps = self._create_btn("📱 Apps", lambda: self.open_apps_requested.emit())
+        self.btn_pull_app = self._create_btn("🔀 Move to PC", self._pull_active_app)
+        self.btn_pull_app.setToolTip("Detect whatever app is open on the phone and move it to a PC Virtual Display window")
 
         grid.addWidget(self.btn_screenshot, 2, 0)
         grid.addWidget(self.btn_screen_on, 2, 1)
         grid.addWidget(self.btn_screen_off, 2, 2)
-        grid.addWidget(self.btn_apps, 2, 3)
+        grid.addWidget(self.btn_pull_app, 2, 3)
 
         main_layout.addWidget(self.body_widget)
+
+    def _pull_active_app(self):
+        if not self.selected_serial:
+            return
+        self.pull_active_app_requested.emit(self.selected_serial)
 
     def _turn_screen_on(self):
         if not self.selected_serial:

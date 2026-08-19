@@ -344,6 +344,7 @@ class MainWindow(QMainWindow):
         # Favorite Apps Bar
         self.favorites_bar.launch_app_requested.connect(self._on_favorite_app_launch)
         self.favorites_bar.move_app_requested.connect(self._on_move_favorite_app_to_display)
+        self.favorites_bar.pull_active_app_requested.connect(self._on_pull_active_phone_app)
         self.favorites_bar.open_apps_manager_requested.connect(lambda: self._switch_page(1))
 
         # Quick actions
@@ -351,6 +352,7 @@ class MainWindow(QMainWindow):
             lambda act, msg: self._append_log(act, msg)
         )
         self.quick_actions.open_apps_requested.connect(lambda: self._switch_page(1))
+        self.quick_actions.pull_active_app_requested.connect(self._on_pull_active_phone_app)
 
         # Drop zone
         self.drop_zone.status_message.connect(
@@ -464,6 +466,28 @@ class MainWindow(QMainWindow):
         ok, msg = self.adb.move_app_to_display(serial, package, display_id)
         status = "Success" if ok else "Notice"
         self._append_log("AppTransfer", f"[{status}] {msg}")
+
+    def _on_pull_active_phone_app(self, serial: str):
+        """Auto-detect whichever app is currently open on the phone and transfer it to PC Virtual Display."""
+        if not serial or not self._check_runtime_installed():
+            return
+
+        pkg = self.adb.get_current_focused_package(serial)
+        if not pkg or "launcher" in pkg.lower() or "systemui" in pkg.lower():
+            self._append_log("AppTransfer", "[Notice] No active foreground app found open on phone screen.")
+            return
+
+        # Check if we have a friendly name or custom resolution preset in favorites
+        name = pkg.split(".")[-1].capitalize()
+        preset_res = ""
+        favorites = self.config.get_favorite_apps()
+        fav = next((f for f in favorites if f.get("package") == pkg), None)
+        if fav:
+            name = fav.get("name", name)
+            preset_res = fav.get("display_res", "")
+
+        self._append_log("AppTransfer", f"Detected active app '{name}' ({pkg}) on phone. Transferring to PC...")
+        self._on_move_favorite_app_to_display(serial, pkg, name, preset_res)
 
     def _on_app_display_launch(self, serial: str, settings: Dict, package: str, title: str):
         if not self._check_runtime_installed():
