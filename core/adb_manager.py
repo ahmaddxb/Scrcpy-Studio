@@ -246,29 +246,60 @@ class AdbManager:
         """Query all active virtual display IDs from dumpsys display."""
         code, out, _ = self._run_cmd(["-s", serial, "shell", "dumpsys", "display"], timeout=4)
         if code == 0:
-            found = re.findall(r"DisplayInfo\{.*?scrcpy.*?, displayId (\d+)", out)
+            found = re.findall(r'DisplayInfo\{[^\}]*?displayId\s+(\d+)[^\}]*?(?:scrcpy|VIRTUAL)', out, re.DOTALL)
             if not found:
-                found = re.findall(r"DisplayInfo\{[^\}]*displayId (\d+)[^\}]*VIRTUAL", out)
-            return [int(x) for x in found if int(x) > 0]
+                found = re.findall(r'displayId\s+(\d+)[^\n]*?(?:VIRTUAL|scrcpy)', out)
+            if not found:
+                found = re.findall(r'\(id=(\d+)\)', out)
+            ids = [int(x) for x in found if int(x) > 0 and int(x) not in (720, 1080, 1440, 1544, 2316, 2340, 3120)]
+            return list(dict.fromkeys(ids))
         return []
+
+    def get_app_main_activity(self, serial: str, package: str) -> Optional[str]:
+        """Query the launchable main activity for a given package."""
+        code, out, _ = self._run_cmd(
+            ["-s", serial, "shell", "cmd", "package", "resolve-activity", "--brief", package],
+            timeout=4
+        )
+        if code == 0:
+            lines = [line.strip() for line in out.splitlines() if "/" in line and not line.startswith("priority=")]
+            if lines:
+                parts = lines[-1].split("/")
+                if len(parts) == 2:
+                    return parts[1]
+        return None
 
     def move_app_to_display(self, serial: str, package: str, display_id: int) -> Tuple[bool, str]:
         """Move / launch an active app directly onto a specific display ID."""
-        # 1. Try intent start on target display
+        if not display_id or display_id <= 0:
+            return False, "Invalid display ID"
+
+        # 1. Try launching with resolved main activity component (most reliable on Android 14/15)
+        act = self.get_app_main_activity(serial, package)
+        if act:
+            comp = f"{package}/{act}"
+            code, out, err = self._run_cmd(
+                ["-s", serial, "shell", "am", "start", "--display", str(display_id), "-n", comp],
+                timeout=5
+            )
+            if code == 0 and "error" not in (out + err).lower():
+                return True, f"Transferred '{package}' ({act}) to Display #{display_id}"
+
+        # 2. Try intent start with MAIN action on target display
         code, out, err = self._run_cmd(
             ["-s", serial, "shell", "am", "start", "--display", str(display_id), "-a", "android.intent.action.MAIN", "-p", package],
             timeout=5
         )
         if code == 0 and "error" not in (out + err).lower():
-            return True, f"Moved '{package}' to Display {display_id}"
+            return True, f"Transferred '{package}' to Display #{display_id}"
 
-        # 2. Fallback to monkey launch with display flag
+        # 3. Fallback to monkey launch with display flag
         code2, out2, err2 = self._run_cmd(
             ["-s", serial, "shell", "monkey", "-p", package, "--display", str(display_id), "-c", "android.intent.category.LAUNCHER", "1"],
             timeout=5
         )
         if code2 == 0:
-            return True, f"Moved '{package}' to Display {display_id}"
+            return True, f"Transferred '{package}' to Display #{display_id}"
 
         return False, out or err or "Failed to transfer app to display"
 

@@ -283,9 +283,12 @@ class ProcessManager(QObject):
 
     def _check_display_id_in_line(self, key: str, line: str):
         import re
-        m = re.search(r"Display:\s*\[(\d+)\]", line, re.IGNORECASE)
+        # Match Scrcpy v4.1 logs: "New display: 1080x2316/445 (id=167)" or "Display: [167]"
+        m = re.search(r"\(id=(\d+)\)", line, re.IGNORECASE)
         if not m:
-            m = re.search(r"(?:New display|displayId|virtual display)\D+(\d+)", line, re.IGNORECASE)
+            m = re.search(r"Display:\s*\[(\d+)\]", line, re.IGNORECASE)
+        if not m:
+            m = re.search(r"displayId\s+(\d+)", line, re.IGNORECASE)
         if m:
             disp_id = int(m.group(1))
             if key in self.sessions:
