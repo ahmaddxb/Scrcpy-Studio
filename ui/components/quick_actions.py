@@ -139,12 +139,16 @@ class QuickActionBar(QFrame):
         grid.addWidget(self.btn_app_switch, 1, 2)
         grid.addWidget(self.btn_notif, 1, 3)
 
-        # Row 2: Utilities (Screenshot & Wake)
+        # Row 2: Utilities (Screenshot, Screen On, Screen Off, Apps)
         self.btn_screenshot = self._create_btn("📸 Screenshot", self._take_screenshot)
-        self.btn_wake = self._create_btn("💡 Wake", lambda: self._send_key(224, "Wake Up"))
+        self.btn_screen_on = self._create_btn("💡 Screen On", lambda: self._send_key(224, "Screen On"))
+        self.btn_screen_off = self._create_btn("🌑 Screen Off", lambda: self._send_key(223, "Screen Off"))
+        self.btn_apps = self._create_btn("📱 Apps", lambda: self.open_apps_requested.emit())
 
-        grid.addWidget(self.btn_screenshot, 2, 0, 1, 2)
-        grid.addWidget(self.btn_wake, 2, 2, 1, 2)
+        grid.addWidget(self.btn_screenshot, 2, 0)
+        grid.addWidget(self.btn_screen_on, 2, 1)
+        grid.addWidget(self.btn_screen_off, 2, 2)
+        grid.addWidget(self.btn_apps, 2, 3)
 
         main_layout.addWidget(self.body_widget)
 

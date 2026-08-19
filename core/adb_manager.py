@@ -226,6 +226,10 @@ class AdbManager:
         """Wake up device screen (KEYCODE_WAKEUP = 224)."""
         return self.send_keyevent(serial, 224)
 
+    def turn_off_screen(self, serial: str) -> bool:
+        """Turn off device screen / sleep (KEYCODE_SLEEP = 223)."""
+        return self.send_keyevent(serial, 223)
+
     def unlock_device(self, serial: str) -> bool:
         """Wake up device and dismiss swipe lock screen."""
         self.send_keyevent(serial, 224)  # WAKEUP
