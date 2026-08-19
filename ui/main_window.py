@@ -421,21 +421,15 @@ class MainWindow(QMainWindow):
             return
 
         session_id = f"{serial}::{package}"
-        # 1. Check if a virtual display is already running for this device or app
-        active_disp_id = self.process_manager.get_active_display_id(session_id) or self.process_manager.get_active_display_id(serial)
-
-        if active_disp_id is None:
-            # Check on device via ADB
-            v_ids = self.adb.get_virtual_display_ids(serial)
-            if v_ids:
-                active_disp_id = v_ids[-1]
+        # Check if a dedicated virtual display window is ALREADY running specifically for this app
+        active_disp_id = self.process_manager.get_active_display_id(session_id)
 
         if active_disp_id is not None:
             ok, msg = self.adb.move_app_to_display(serial, package, active_disp_id)
             status = "Success" if ok else "Notice"
             self._append_log("AppTransfer", f"[{status}] {msg}")
         else:
-            # No virtual display running yet: Open dedicated Virtual Display FIRST (WITHOUT --start-app so it doesn't cold-start!)
+            # Always open a new, independent dedicated Virtual Display window for this app
             self._append_log("AppTransfer", f"Opening dedicated Virtual Display window for '{name}' (awaiting display ID)...")
             self.pending_app_transfers[session_id] = (serial, package, name)
 
