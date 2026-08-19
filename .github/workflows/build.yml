@@ -39,12 +39,12 @@ jobs:
           python-version: '3.13'
           cache: 'pip'
 
-      - name: Install Python Dependencies
+      - name: Install Python Dependencies & Build Tools
         run: |
           python -m pip install --upgrade pip
-          pip install PySide6 pyinstaller
+          pip install PySide6 pyinstaller pillow
 
-      - name: Download Latest Official Scrcpy Runtime
+      - name: Download Official Scrcpy Runtime
         shell: pwsh
         run: |
           $release = Invoke-RestMethod -Uri "https://api.github.com/repos/Genymobile/scrcpy/releases/latest"
@@ -57,7 +57,23 @@ jobs:
           Remove-Item -Path "scrcpy_latest.zip", "temp_scrcpy" -Recurse -Force
           Test-Path "scrcpy\scrcpy.exe"
 
-      - name: Package Portable ZIP Release
+      - name: Build Standalone Executable (.EXE)
+        shell: pwsh
+        run: |
+          python -m PyInstaller --name=ScrcpyStudio --onedir --noconsole --clean --noconfirm --distpath=dist --workpath=build --add-data="ui;ui" --add-data="core;core" app.py
+          
+          # Bundle Scrcpy runtime into release folder
+          Copy-Item -Path "scrcpy" -Destination "dist\ScrcpyStudio\scrcpy" -Recurse -Force
+          
+          # Initialize default config.json from template
+          if (Test-Path "config.example.json") {
+              Copy-Item -Path "config.example.json" -Destination "dist\ScrcpyStudio\config.json" -Force
+          }
+          
+          # Copy Documentation
+          Copy-Item -Path "README.md", "LICENSE.txt" -Destination "dist\ScrcpyStudio\" -Force
+
+      - name: Package Release ZIP Archive
         shell: pwsh
         env:
           INPUT_TAG: ${{ github.event.inputs.tag_name }}
@@ -70,8 +86,8 @@ jobs:
               "v1.0.0-beta"
           }
           $zipName = "Scrcpy-Studio-Windows-$ver.zip"
-          Compress-Archive -Path "app.py", "core", "ui", "scrcpy", "docs", "README.md", "LICENSE.txt" -DestinationPath $zipName
-          Write-Host "Created release archive: $zipName"
+          Compress-Archive -Path "dist\ScrcpyStudio\*" -DestinationPath $zipName
+          Write-Host "Created standalone release archive: $zipName"
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name != '')
