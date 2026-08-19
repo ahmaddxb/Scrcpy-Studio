@@ -86,10 +86,19 @@ class DeviceCard(QFrame):
         self.btn_pin.clicked.connect(self._toggle_pin)
         top_row.addWidget(self.btn_pin)
 
-        # Connection badge (USB vs WiFi)
+        # Connection badge (USB vs WiFi vs LAN/Ethernet)
         is_wireless = self.device.is_wireless or (":" in self.device.serial) or ("._tcp" in self.device.serial)
-        conn_text = "📶 WiFi" if is_wireless else "🔌 USB"
-        conn_color = "#0284C7" if is_wireless else "#6366F1"
+        conn_type = getattr(self.device, "connection_type", "wifi" if is_wireless else "usb")
+        if not is_wireless or conn_type == "usb":
+            conn_text = "🔌 USB"
+            conn_color = "#6366F1"
+        elif conn_type == "ethernet":
+            conn_text = "🌐 LAN"
+            conn_color = "#10B981"
+        else:
+            conn_text = "📶 WiFi"
+            conn_color = "#0284C7"
+
         self.conn_badge = QLabel(conn_text)
         self.conn_badge.setStyleSheet(
             f"background-color: {conn_color}33; color: {conn_color}; "
@@ -242,7 +251,7 @@ class DeviceCard(QFrame):
 
         self._update_pin_button_style()
 
-        # 1. Update status dot color
+        # 1. Update status dot color & connection badge
         if self.is_offline:
             dot_color = "#64748B"  # gray
         elif self.device.state == "device":
@@ -252,6 +261,24 @@ class DeviceCard(QFrame):
         else:
             dot_color = "#EF4444"  # red
         self.status_dot.setStyleSheet(f"background-color: {dot_color}; border-radius: 5px;")
+
+        is_wireless = self.device.is_wireless or (":" in self.device.serial) or ("._tcp" in self.device.serial)
+        conn_type = getattr(self.device, "connection_type", "wifi" if is_wireless else "usb")
+        if not is_wireless or conn_type == "usb":
+            conn_text = "🔌 USB"
+            conn_color = "#6366F1"
+        elif conn_type == "ethernet":
+            conn_text = "🌐 LAN"
+            conn_color = "#10B981"
+        else:
+            conn_text = "📶 WiFi"
+            conn_color = "#0284C7"
+
+        self.conn_badge.setText(conn_text)
+        self.conn_badge.setStyleSheet(
+            f"background-color: {conn_color}33; color: {conn_color}; "
+            f"border: 1px solid {conn_color}66; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 600;"
+        )
 
         # 2. Update screen timeout badge & battery info
         if not self.is_offline and self.device.screen_off_timeout is not None:

@@ -20,6 +20,7 @@ class AdbDevice:
     transport_id: str = ""
     is_wireless: bool = False
     ip_port: str = ""
+    connection_type: str = "usb"  # 'usb', 'wifi', 'ethernet'
     battery_level: Optional[int] = None
     battery_status: str = ""
     wifi_ip: str = ""
@@ -132,6 +133,7 @@ class AdbManager:
 
             # Query battery and screen timeout if device is authorized
             if state == "device":
+                dev.connection_type = self.get_network_interface_type(serial)
                 bat, charging = self.get_battery_info(serial)
                 dev.battery_level = bat
                 dev.is_charging = charging
@@ -140,6 +142,18 @@ class AdbManager:
             devices.append(dev)
 
         return devices
+
+    def get_network_interface_type(self, serial: str) -> str:
+        """Detect whether connected via 'ethernet', 'wifi', or 'usb'."""
+        if not bool(re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$", serial)):
+            return "usb"
+        code, out, _ = self._run_cmd(["-s", serial, "shell", "ip", "route"], timeout=2)
+        if code == 0:
+            if "eth0" in out or "eth1" in out or "lan0" in out:
+                return "ethernet"
+            elif "wlan" in out or "swlan" in out:
+                return "wifi"
+        return "wifi"
 
     def get_battery_info(self, serial: str) -> Tuple[Optional[int], bool]:
         """Fetch battery level percentage and charging status."""
