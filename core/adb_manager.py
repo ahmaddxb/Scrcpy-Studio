@@ -19,8 +19,8 @@ class AdbDevice:
     is_wireless: bool = False
     ip_port: str = ""
     battery_level: Optional[int] = None
-    is_charging: bool = False
-    screen_off_timeout: Optional[int] = None
+    battery_status: str = ""
+    wifi_ip: str = ""
 
     @property
     def display_name(self) -> str:
@@ -36,7 +36,7 @@ class AdbManager:
 
     def __init__(self, adb_dir: Optional[Path] = None):
         if adb_dir is None:
-            project_root = Path(__file__).parent.parent
+            project_root = get_project_root()
             adb_dir = project_root / "scrcpy"
             if not adb_dir.exists():
                 candidates = sorted(project_root.glob("scrcpy-win64-*"), reverse=True)

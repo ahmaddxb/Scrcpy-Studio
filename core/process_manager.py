@@ -7,6 +7,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 from PySide6.QtCore import QObject, QProcess, Signal
 
+from core.config_manager import get_project_root
+
 
 @dataclass
 class ScrcpySession:
@@ -30,7 +32,7 @@ class ProcessManager(QObject):
     def __init__(self, scrcpy_dir: Optional[Path] = None, adb=None, parent=None):
         super().__init__(parent)
         if scrcpy_dir is None:
-            project_root = Path(__file__).parent.parent
+            project_root = get_project_root()
             scrcpy_dir = project_root / "scrcpy"
             if not scrcpy_dir.exists():
                 candidates = sorted(project_root.glob("scrcpy-win64-*"), reverse=True)

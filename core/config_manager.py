@@ -2,11 +2,20 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+
+def get_project_root() -> Path:
+    """Return project root directory, supporting PyInstaller frozen executables."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent.resolve()
+    return Path(__file__).parent.parent.resolve()
+
+
 DEFAULT_CONFIG: Dict[str, Any] = {
-    "scrcpy_path": str(Path(__file__).parent.parent / "scrcpy"),
+    "scrcpy_path": str(get_project_root() / "scrcpy"),
     "theme": "dark",
     "auto_refresh_interval_ms": 2000,
     "last_selected_serial": "",
@@ -131,7 +140,7 @@ class ConfigManager:
     """Manages application configuration, presets, and path resolution."""
 
     def __init__(self, config_file: str = "config.json"):
-        self.config_path = Path(__file__).parent.parent / config_file
+        self.config_path = get_project_root() / config_file
         self.data: Dict[str, Any] = {}
         self.load()
 
@@ -330,7 +339,7 @@ class ConfigManager:
         if custom_path and Path(custom_path).exists():
             return Path(custom_path)
 
-        project_root = Path(__file__).parent.parent
+        project_root = get_project_root()
         # 1. Look for scrcpy folder directly in project root
         scrcpy_dir = project_root / "scrcpy"
         if scrcpy_dir.exists():

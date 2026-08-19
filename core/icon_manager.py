@@ -9,6 +9,8 @@ from typing import Dict, Optional, Set
 from PySide6.QtCore import QObject, QRunnable, QSize, QThread, QThreadPool, Signal
 from PySide6.QtGui import QIcon, QPixmap
 
+from core.config_manager import get_project_root
+
 
 class IconFetchRunnable(QRunnable):
     """Background task to extract app icon directly via ADB or fetch from metadata."""
@@ -144,7 +146,7 @@ class IconManager(QObject):
         self.fetching: Set[str] = set()
 
         if adb_bin is None:
-            project_root = Path(__file__).parent.parent
+            project_root = get_project_root()
             adb_file = project_root / "scrcpy" / "adb.exe"
             if not adb_file.exists():
                 candidates = sorted(project_root.glob("scrcpy-win64-*/adb.exe"), reverse=True)
