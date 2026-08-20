@@ -119,16 +119,16 @@ class QuickActionBar(QFrame):
         grid.setContentsMargins(0, 2, 0, 2)
         grid.setSpacing(6)
 
-        # Row 0: Hardware Keys & Unlock
-        self.btn_power = self._create_btn("⏻ Power", lambda: self._send_key(26, "Power Button"))
+        # Row 0: Screen & Power State (Unlock, Wake Up, Screen On, Screen Off)
         self.btn_unlock = self._create_btn("🔓 Unlock", self._unlock_device)
-        self.btn_vol_up = self._create_btn("🔊 Vol +", lambda: self._send_key(24, "Volume Up"))
-        self.btn_vol_down = self._create_btn("🔉 Vol -", lambda: self._send_key(25, "Volume Down"))
+        self.btn_wake = self._create_btn("⚡ Wake Up", self._wake_up_device)
+        self.btn_screen_on = self._create_btn("💡 Screen On", self._turn_screen_on)
+        self.btn_screen_off = self._create_btn("🌑 Screen Off", self._turn_screen_off)
 
-        grid.addWidget(self.btn_power, 0, 0)
-        grid.addWidget(self.btn_unlock, 0, 1)
-        grid.addWidget(self.btn_vol_up, 0, 2)
-        grid.addWidget(self.btn_vol_down, 0, 3)
+        grid.addWidget(self.btn_unlock, 0, 0)
+        grid.addWidget(self.btn_wake, 0, 1)
+        grid.addWidget(self.btn_screen_on, 0, 2)
+        grid.addWidget(self.btn_screen_off, 0, 3)
 
         # Row 1: Navigation Keys
         self.btn_back = self._create_btn("◀ Back", lambda: self._send_key(4, "Back"))
@@ -141,24 +141,34 @@ class QuickActionBar(QFrame):
         grid.addWidget(self.btn_app_switch, 1, 2)
         grid.addWidget(self.btn_notif, 1, 3)
 
-        # Row 2: Utilities (Screenshot, Screen On, Screen Off, Move to PC)
+        # Row 2: Hardware & Utilities (Power, Screenshot, Vol +, Vol -)
+        self.btn_power = self._create_btn("⏻ Power", lambda: self._send_key(26, "Power Button"))
         self.btn_screenshot = self._create_btn("📸 Screenshot", self._take_screenshot)
-        self.btn_screen_on = self._create_btn("💡 Screen On", self._turn_screen_on)
-        self.btn_screen_off = self._create_btn("🌑 Screen Off", self._turn_screen_off)
+        self.btn_vol_up = self._create_btn("🔊 Vol +", lambda: self._send_key(24, "Volume Up"))
+        self.btn_vol_down = self._create_btn("🔉 Vol -", lambda: self._send_key(25, "Volume Down"))
+
+        grid.addWidget(self.btn_power, 2, 0)
+        grid.addWidget(self.btn_screenshot, 2, 1)
+        grid.addWidget(self.btn_vol_up, 2, 2)
+        grid.addWidget(self.btn_vol_down, 2, 3)
+
+        # Row 3: Advanced Actions (Move to PC, Restart ADB Server)
         self.btn_pull_app = self._create_btn("🔀 Move to PC", self._pull_active_app)
         self.btn_pull_app.setToolTip("Detect whatever app is open on the phone and move it to a PC Virtual Display window")
-
-        grid.addWidget(self.btn_screenshot, 2, 0)
-        grid.addWidget(self.btn_screen_on, 2, 1)
-        grid.addWidget(self.btn_screen_off, 2, 2)
-        grid.addWidget(self.btn_pull_app, 2, 3)
-
-        # Row 3: ADB Server Recovery
         self.btn_restart_adb = self._create_btn("🔄 Restart ADB Server", self._restart_adb)
         self.btn_restart_adb.setToolTip("Restart the local ADB server daemon")
-        grid.addWidget(self.btn_restart_adb, 3, 0, 1, 4)
+
+        grid.addWidget(self.btn_pull_app, 3, 0, 1, 2)
+        grid.addWidget(self.btn_restart_adb, 3, 2, 1, 2)
 
         main_layout.addWidget(self.body_widget)
+
+    def _wake_up_device(self):
+        if not self.selected_serial:
+            return
+        ok = self.adb.wake_up(self.selected_serial)
+        if ok:
+            self.action_triggered.emit("Wake Up", f"Sent wake up keyevent to {self.selected_serial}")
 
     def _pull_active_app(self):
         if not self.selected_serial:

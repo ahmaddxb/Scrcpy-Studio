@@ -24,6 +24,7 @@ class AdbDevice:
     battery_level: Optional[int] = None
     battery_status: str = ""
     wifi_ip: str = ""
+    hardware_serial: str = ""
 
     @property
     def display_name(self) -> str:
@@ -133,9 +134,10 @@ class AdbManager:
                 ip_port=ip_port
             )
 
-            # Query battery and screen timeout if device is authorized
+            # Query battery, hardware serial, and screen timeout if device is authorized
             if state == "device":
                 dev.connection_type = self.get_network_interface_type(serial)
+                dev.hardware_serial = self.get_hardware_serial(serial)
                 bat, charging = self.get_battery_info(serial)
                 dev.battery_level = bat
                 dev.is_charging = charging
@@ -144,6 +146,23 @@ class AdbManager:
             devices.append(dev)
 
         return devices
+
+    def get_hardware_serial(self, serial: str) -> str:
+        """Query permanent physical hardware serial number (ro.serialno / ro.boot.serialno)."""
+        # Check if mDNS serial format has embedded hardware serial
+        m = re.match(r"^adb-([a-zA-Z0-9_-]+?)-", serial)
+        if m:
+            return m.group(1)
+        # If serial is already a direct hardware serial (not an IP:port)
+        if not bool(re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$", serial)):
+            return serial
+        code, out, _ = self._run_cmd(["-s", serial, "shell", "getprop", "ro.serialno"], timeout=2)
+        if code == 0 and out.strip() and out.strip().lower() != "unknown":
+            return out.strip()
+        code2, out2, _ = self._run_cmd(["-s", serial, "shell", "getprop", "ro.boot.serialno"], timeout=2)
+        if code2 == 0 and out2.strip() and out2.strip().lower() != "unknown":
+            return out2.strip()
+        return serial
 
     def get_network_interface_type(self, serial: str) -> str:
         """Detect whether connected via 'ethernet', 'wifi', or 'usb'."""

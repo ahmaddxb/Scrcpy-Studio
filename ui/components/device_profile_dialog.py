@@ -28,9 +28,10 @@ class DeviceProfileDialog(QDialog):
         self.serial = serial
         self.config = config
         self.device = device
-        self.profile = self.config.get_device_profile(self.serial)
+        self.hw_serial = (device.hardware_serial if device and device.hardware_serial else serial)
+        self.profile = self.config.get_device_profile(self.serial, hardware_serial=self.hw_serial)
 
-        alias = self.config.get_device_alias(self.serial, fallback=self.serial)
+        alias = self.config.get_device_alias(self.serial, fallback=self.serial, hardware_serial=self.hw_serial)
         self.setWindowTitle(f"Device Profile — {alias}")
         self.setFixedSize(520, 530)
         self.setModal(True)
@@ -61,7 +62,8 @@ class DeviceProfileDialog(QDialog):
         title_box.addWidget(lbl_title)
 
         model_info = f" ({self.device.model})" if self.device and self.device.model else ""
-        lbl_sub = QLabel(f"Hardware Serial: {self.serial}{model_info}")
+        endpoint_info = f" | {self.serial}" if self.hw_serial != self.serial else ""
+        lbl_sub = QLabel(f"Hardware Serial: {self.hw_serial}{endpoint_info}{model_info}")
         lbl_sub.setStyleSheet("font-size: 11px; color: #64748B; font-family: monospace;")
         title_box.addWidget(lbl_sub)
         h_layout.addLayout(title_box)
@@ -214,13 +216,14 @@ class DeviceProfileDialog(QDialog):
         self.profile["default_display_res"] = display_res
         self.profile["use_custom_settings"] = use_custom
 
-        self.config.save_device_profile(self.serial, self.profile)
-        self.config.set_device_alias(self.serial, alias)
+        self.config.save_device_profile(self.serial, self.profile, hardware_serial=self.hw_serial)
+        self.config.set_device_alias(self.serial, alias, hardware_serial=self.hw_serial)
 
         # Handle Pin
         if is_pinned:
             is_wireless = ":" in self.serial or (self.device.is_wireless if self.device else False)
-            self.config.pin_device(self.serial, alias, is_wireless=is_wireless)
+            conn_type = getattr(self.device, "connection_type", "") if self.device else ""
+            self.config.pin_device(self.serial, alias, is_wireless=is_wireless, connection_type=conn_type, hardware_serial=self.hw_serial)
         else:
             self.config.unpin_device(self.serial)
 

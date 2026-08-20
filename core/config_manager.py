@@ -215,35 +215,43 @@ class ConfigManager:
     def get_pinned_devices(self) -> list:
         return self.data.get("pinned_devices", [])
 
-    def pin_device(self, serial: str, name: str = "", is_wireless: bool = False, connection_type: str = "") -> None:
+    def pin_device(self, serial: str, name: str = "", is_wireless: bool = False, connection_type: str = "", hardware_serial: str = "") -> None:
         pinned = self.get_pinned_devices()
         clean_name = name.strip() if (name and name.strip() != serial) else serial
-        if not connection_type:
-            connection_type = "wifi" if (is_wireless or ":" in serial) else "usb"
+        # Update existing if serial or hardware_serial already pinned
         for p in pinned:
-            if p.get("serial") == serial:
-                if clean_name != serial or not p.get("name"):
+            if p.get("serial") == serial or (hardware_serial and p.get("hardware_serial") == hardware_serial):
+                p["serial"] = serial
+                if clean_name and clean_name != serial:
                     p["name"] = clean_name
                 p["is_wireless"] = is_wireless
-                p["connection_type"] = connection_type
+                if connection_type:
+                    p["connection_type"] = connection_type
+                if hardware_serial:
+                    p["hardware_serial"] = hardware_serial
+                self.data["pinned_devices"] = pinned
                 self.save()
                 return
         pinned.append({
             "serial": serial,
             "name": clean_name,
             "is_wireless": is_wireless,
-            "connection_type": connection_type
+            "connection_type": connection_type or ("wifi" if is_wireless else "usb"),
+            "hardware_serial": hardware_serial
         })
         self.data["pinned_devices"] = pinned
         self.save()
 
     def unpin_device(self, serial: str) -> None:
         pinned = self.get_pinned_devices()
-        self.data["pinned_devices"] = [p for p in pinned if p.get("serial") != serial]
+        self.data["pinned_devices"] = [p for p in pinned if p.get("serial") != serial and p.get("hardware_serial") != serial]
         self.save()
 
-    def is_pinned(self, serial: str) -> bool:
-        return any(p.get("serial") == serial for p in self.get_pinned_devices())
+    def is_pinned(self, serial: str, hardware_serial: str = "") -> bool:
+        return any(
+            p.get("serial") == serial or (hardware_serial and p.get("hardware_serial") == hardware_serial)
+            for p in self.get_pinned_devices()
+        )
 
     # === PER-CONNECTED DEVICE PROFILES ===
 
@@ -251,62 +259,104 @@ class ConfigManager:
         """Return the dictionary of all saved per-device profiles."""
         return self.data.get("device_profiles", {})
 
-    def get_device_profile(self, serial: str) -> Dict[str, Any]:
-        """Return profile data for a specific device serial, or an empty dict."""
-        if not serial:
+    def get_device_profile(self, serial: str, hardware_serial: str = "") -> Dict[str, Any]:
+        """Return profile data for a specific device, keyed preferentially by hardware serial."""
+        if not serial and not hardware_serial:
             return {}
-        return self.get_device_profiles().get(serial, {})
+        profiles = self.get_device_profiles()
 
-    def save_device_profile(self, serial: str, profile_data: Dict[str, Any]) -> None:
-        """Save or update profile dictionary for a specific device serial."""
-        if not serial:
+        # 1. Direct hardware serial lookup
+        if hardware_serial and hardware_serial in profiles:
+            return profiles[hardware_serial]
+
+        # 2. Direct serial lookup (e.g. IP:PORT or USB serial)
+        if serial and serial in profiles:
+            prof = profiles[serial]
+            if hardware_serial and hardware_serial != serial:
+                self.save_device_profile(serial, prof, hardware_serial=hardware_serial)
+            return prof
+
+        # 3. Match against profile metadata fields
+        for k, p in profiles.items():
+            if not isinstance(p, dict):
+                continue
+            if hardware_serial and p.get("hardware_serial") == hardware_serial:
+                return p
+            if serial and p.get("serial") == serial:
+                return p
+            if serial and ":" in serial and ":" in k:
+                if serial.split(":")[0] == k.split(":")[0]:
+                    if hardware_serial:
+                        self.save_device_profile(serial, p, hardware_serial=hardware_serial)
+                    return p
+
+        return {}
+
+    def save_device_profile(self, serial: str, profile_data: Dict[str, Any], hardware_serial: str = "") -> None:
+        """Save or update profile dictionary for a device, keyed preferentially by permanent hardware serial."""
+        if not serial and not hardware_serial:
             return
         if "device_profiles" not in self.data:
             self.data["device_profiles"] = {}
-        self.data["device_profiles"][serial] = profile_data
+
+        hw = hardware_serial or profile_data.get("hardware_serial", "")
+        key = hw if (hw and hw.lower() != "unknown") else serial
+        if hw:
+            profile_data["hardware_serial"] = hw
+        if serial:
+            profile_data["last_seen_serial"] = serial
+
+        self.data["device_profiles"][key] = profile_data
+
+        # If migrating from old IP:port key to hardware serial, delete stale IP key
+        if key != serial and serial in self.data["device_profiles"]:
+            del self.data["device_profiles"][serial]
+
         self.save()
 
-    def get_device_alias(self, serial: str, fallback: str = "") -> str:
+    def get_device_alias(self, serial: str, fallback: str = "", hardware_serial: str = "") -> str:
         """Get custom friendly alias for a device if set, else fallback to model / display name."""
-        if not serial:
+        if not serial and not hardware_serial:
             return fallback or ""
-        profile = self.get_device_profile(serial)
+        profile = self.get_device_profile(serial, hardware_serial=hardware_serial)
         alias = profile.get("alias", "").strip()
-        if alias and alias != serial:
+        if alias and alias != serial and alias != hardware_serial:
             return alias
         # Also check pinned_devices
         for p in self.get_pinned_devices():
-            if p.get("serial") == serial:
+            if (serial and p.get("serial") == serial) or (hardware_serial and p.get("hardware_serial") == hardware_serial):
                 p_name = p.get("name", "").strip()
-                if p_name and p_name != serial:
+                if p_name and p_name != serial and p_name != hardware_serial:
                     return p_name
         return fallback or serial
 
-    def set_device_alias(self, serial: str, alias: str) -> None:
+    def set_device_alias(self, serial: str, alias: str, hardware_serial: str = "") -> None:
         """Set a friendly name/alias for a device."""
-        if not serial:
+        if not serial and not hardware_serial:
             return
         clean_alias = alias.strip()
-        profile = self.get_device_profile(serial)
-        if clean_alias and clean_alias != serial:
+        profile = self.get_device_profile(serial, hardware_serial=hardware_serial)
+        if clean_alias and clean_alias != serial and clean_alias != hardware_serial:
             profile["alias"] = clean_alias
         elif "alias" in profile:
             del profile["alias"]
-        self.save_device_profile(serial, profile)
+        self.save_device_profile(serial, profile, hardware_serial=hardware_serial)
         # Also update pinned devices if pinned
         pinned = self.get_pinned_devices()
         for p in pinned:
-            if p.get("serial") == serial:
+            if (serial and p.get("serial") == serial) or (hardware_serial and p.get("hardware_serial") == hardware_serial):
                 p["name"] = clean_alias or serial
+                if hardware_serial:
+                    p["hardware_serial"] = hardware_serial
                 self.data["pinned_devices"] = pinned
                 self.save()
                 break
 
-    def get_device_settings(self, serial: str) -> Dict[str, Any]:
+    def get_device_settings(self, serial: str, hardware_serial: str = "") -> Dict[str, Any]:
         """Return device-specific mirroring settings if custom settings are enabled, else global settings."""
-        if not serial:
+        if not serial and not hardware_serial:
             return self.data.get("current_settings", {})
-        profile = self.get_device_profile(serial)
+        profile = self.get_device_profile(serial, hardware_serial=hardware_serial)
         if profile.get("use_custom_settings", False) and "settings" in profile:
             return profile["settings"]
         if profile.get("active_preset"):
@@ -315,27 +365,27 @@ class ConfigManager:
                 return self.data["presets"][preset_name]
         return self.data.get("current_settings", {})
 
-    def set_device_settings(self, serial: str, settings: Dict[str, Any]) -> None:
+    def set_device_settings(self, serial: str, settings: Dict[str, Any], hardware_serial: str = "") -> None:
         """Save current stream settings specifically for a device."""
-        if not serial:
+        if not serial and not hardware_serial:
             return
-        profile = self.get_device_profile(serial)
+        profile = self.get_device_profile(serial, hardware_serial=hardware_serial)
         profile["settings"] = settings
         profile["use_custom_settings"] = True
-        self.save_device_profile(serial, profile)
+        self.save_device_profile(serial, profile, hardware_serial=hardware_serial)
 
-    def is_device_custom_settings(self, serial: str) -> bool:
+    def is_device_custom_settings(self, serial: str, hardware_serial: str = "") -> bool:
         """Check if a device has custom settings enabled."""
-        profile = self.get_device_profile(serial)
+        profile = self.get_device_profile(serial, hardware_serial=hardware_serial)
         return bool(profile.get("use_custom_settings", False))
 
-    def set_device_custom_settings(self, serial: str, enabled: bool) -> None:
+    def set_device_custom_settings(self, serial: str, enabled: bool, hardware_serial: str = "") -> None:
         """Toggle whether a device uses custom overrides vs global settings."""
-        if not serial:
+        if not serial and not hardware_serial:
             return
-        profile = self.get_device_profile(serial)
+        profile = self.get_device_profile(serial, hardware_serial=hardware_serial)
         profile["use_custom_settings"] = enabled
-        self.save_device_profile(serial, profile)
+        self.save_device_profile(serial, profile, hardware_serial=hardware_serial)
 
     def get_favorite_apps(self) -> list:
         default_favs = [

@@ -21,6 +21,7 @@ class DeviceCard(QFrame):
     otg_requested = Signal(str)  # serial
     stop_requested = Signal(str)  # serial
     disconnect_requested = Signal(str)  # serial
+    remove_requested = Signal(str)  # serial (unpins and removes from list)
     connect_requested = Signal(str)  # serial (for offline pinned devices)
     pin_toggled = Signal(str, bool)  # serial, is_pinned
     profile_requested = Signal(str)  # serial
@@ -109,16 +110,16 @@ class DeviceCard(QFrame):
         )
         top_row.addWidget(self.conn_badge)
 
-        # Close/Disconnect icon button for wireless endpoints
+        # Remove / Close icon button
         self.btn_close = QPushButton("✕")
-        self.btn_close.setToolTip("Disconnect wireless device")
+        self.btn_close.setToolTip("Remove / Unpin device from sidebar")
         self.btn_close.setFixedSize(20, 20)
         self.btn_close.setStyleSheet(
             "QPushButton { background: transparent; color: #64748B; border: none; font-weight: bold; font-size: 11px; padding: 0px; }"
             "QPushButton:hover { color: #EF4444; background: #EF444422; border-radius: 4px; }"
         )
-        self.btn_close.clicked.connect(lambda: self.disconnect_requested.emit(self.device.serial))
-        self.btn_close.setVisible(is_wireless and not self.is_offline)
+        self.btn_close.clicked.connect(lambda: self.remove_requested.emit(self.device.serial))
+        self.btn_close.setVisible(True)
         top_row.addWidget(self.btn_close)
 
         main_layout.addLayout(top_row)
@@ -236,6 +237,9 @@ class DeviceCard(QFrame):
             act_rec = menu.addAction("⚡ Reconnect Device")
             act_rec.triggered.connect(lambda: self.connect_requested.emit(self.device.serial))
 
+        act_rem = menu.addAction("✕ Remove Device from Sidebar")
+        act_rem.triggered.connect(lambda: self.remove_requested.emit(self.device.serial))
+
         menu.exec(event.globalPos())
 
     def set_active(self, active: bool):
@@ -330,7 +334,7 @@ class DeviceCard(QFrame):
 
         # 3. Toggle button visibility based on device state
         show_disconnect = is_wireless and not self.is_offline
-        self.btn_close.setVisible(show_disconnect)
+        self.btn_close.setVisible(True)
         self.btn_card_disc.setVisible(show_disconnect)
 
         if self.is_offline:

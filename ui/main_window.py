@@ -37,6 +37,7 @@ from ui.components.quick_actions import QuickActionBar
 from ui.components.settings_panel import SettingsPanel
 from ui.components.stream_panel import StreamPanel
 from ui.components.wireless_dialog import WirelessDialog
+from ui.components.device_profile_dialog import DeviceProfileDialog
 
 
 class AdbScanWorker(QThread):
@@ -663,6 +664,7 @@ class MainWindow(QMainWindow):
         card.otg_requested.connect(lambda s=dev.serial: self._launch_device_otg(s))
         card.stop_requested.connect(lambda s=dev.serial: self._stop_device(s))
         card.disconnect_requested.connect(lambda s=dev.serial: self._on_disconnect_device(s))
+        card.remove_requested.connect(lambda s=dev.serial: self._on_remove_device(s))
         card.connect_requested.connect(self._on_reconnect_pinned_device)
         card.pin_toggled.connect(self._on_pin_toggled)
         card.profile_requested.connect(self._open_device_profile_dialog)
@@ -710,18 +712,26 @@ class MainWindow(QMainWindow):
             rendered_serials.add(dev.serial)
             is_active = (dev.serial == self.selected_serial)
             is_running = self.process_manager.is_running(dev.serial)
-            is_pinned = self.config.is_pinned(dev.serial)
-            alias = self.config.get_device_alias(dev.serial, fallback=dev.display_name)
+            is_pinned = self.config.is_pinned(dev.serial, hardware_serial=dev.hardware_serial)
+            alias = self.config.get_device_alias(dev.serial, fallback=dev.display_name, hardware_serial=dev.hardware_serial)
 
             if is_pinned:
                 cur_pinfo = pinned_map.get(dev.serial)
-                if cur_pinfo and cur_pinfo.get("connection_type") != dev.connection_type:
+                if not cur_pinfo and dev.hardware_serial:
+                    for p in pinned_list:
+                        if p.get("hardware_serial") == dev.hardware_serial:
+                            cur_pinfo = p
+                            break
+                if cur_pinfo and (cur_pinfo.get("connection_type") != dev.connection_type or not cur_pinfo.get("hardware_serial")):
                     cur_pinfo["connection_type"] = dev.connection_type
+                    if dev.hardware_serial:
+                        cur_pinfo["hardware_serial"] = dev.hardware_serial
                     self.config.pin_device(
                         dev.serial,
                         alias,
                         is_wireless=dev.is_wireless or (":" in dev.serial),
-                        connection_type=dev.connection_type
+                        connection_type=dev.connection_type,
+                        hardware_serial=dev.hardware_serial
                     )
 
             if dev.serial in self.card_widgets:
@@ -748,7 +758,8 @@ class MainWindow(QMainWindow):
         # 2. Update existing or render pinned devices that are currently offline / disconnected
         for serial, pinfo in pinned_map.items():
             if serial not in rendered_serials:
-                alias = self.config.get_device_alias(serial, fallback=pinfo.get("name", serial))
+                hw_s = pinfo.get("hardware_serial", "")
+                alias = self.config.get_device_alias(serial, fallback=pinfo.get("name", serial), hardware_serial=hw_s)
                 is_wireless = pinfo.get("is_wireless", (":" in serial))
                 conn_type = pinfo.get("connection_type", "wifi" if is_wireless else "usb")
                 offline_dev = AdbDevice(
@@ -756,7 +767,8 @@ class MainWindow(QMainWindow):
                     state="offline",
                     model=alias,
                     is_wireless=is_wireless,
-                    connection_type=conn_type
+                    connection_type=conn_type,
+                    hardware_serial=hw_s
                 )
                 if serial in self.card_widgets:
                     self.card_widgets[serial].update_device(
@@ -883,6 +895,30 @@ class MainWindow(QMainWindow):
         ok, msg = self.adb.disconnect_wireless(serial)
         self._append_log("ADB", f"Disconnected {serial}: {msg or ('OK' if ok else 'Failed')}")
         self._manual_refresh()
+
+    def _on_remove_device(self, serial: str):
+        if not serial:
+            return
+        # Stop active mirroring session first if running
+        if self.process_manager.is_running(serial):
+            self.process_manager.stop_session(serial)
+
+        # Unpin device from persistent config
+        if self.config.is_pinned(serial):
+            self.config.unpin_device(serial)
+            self._append_log("System", f"Removed and unpinned device {serial}")
+
+        # If it is a wireless endpoint, disconnect it
+        if ":" in serial or (serial in self.devices and self.devices[serial].is_wireless):
+            self.adb.disconnect_wireless(serial)
+
+        self._manual_refresh()
+
+    def _open_device_profile_dialog(self, serial: str):
+        dev = self.devices.get(serial)
+        dlg = DeviceProfileDialog(serial, self.config, device=dev, parent=self)
+        dlg.profile_saved.connect(lambda s: self._manual_refresh())
+        dlg.exec()
 
     def _update_header_runtime_status(self):
         """Update header version badge and download/update button styling based on runtime availability."""
