@@ -31,7 +31,8 @@
 * **Wake On Demand**: Instantly restore the physical screen (<kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>O</kbd>) directly from the Quick Actions dock.
 
 ### 🌐 5. Intelligent Network & Device Detection
-* **Real Network Interface Inspection**: Accurately differentiates between **`🌐 LAN`** (Wired Ethernet `eth0`, e.g. Android TV), **`📶 WiFi`** (`wlan0`), and **`🔌 USB`**.
+* **Real Network Interface Inspection**: Accurately differentiates between **`🌐 LAN`** (Wired Ethernet `eth0`, e.g. Android TV), **`📶 WiFi`** (`wlan0`), and **`🔌 USB`**, including Android 11+ mDNS TLS wireless debugging.
+* **Hardware Serial Profile Persistence**: All custom settings, presets, and friendly aliases are strictly tied to permanent hardware serials (`ro.serialno`), preventing lost configurations across IP/port changes.
 * **Subnet & mDNS Network Scanner**: High-speed parallel Wi-Fi discovery across 254 subnet IPs in < 1.5 seconds.
 * **Persistent Pinned Devices**: Pin frequently used USB/Wi-Fi/LAN devices with configurable auto-reconnect on startup and permanent offline badge memory.
 
