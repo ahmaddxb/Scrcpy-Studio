@@ -327,6 +327,23 @@ class AppLauncherWidget(QWidget):
         self.btn_del_disp_preset.clicked.connect(self._delete_disp_preset)
         mode_layout.addWidget(self.btn_del_disp_preset)
 
+        # IME Policy Selector for Virtual Display
+        lbl_ime = QLabel("⌨️ IME Policy:")
+        lbl_ime.setStyleSheet("color: #94A3B8; font-size: 11px; font-weight: 500; margin-left: 6px;")
+        mode_layout.addWidget(lbl_ime)
+
+        self.combo_ime_policy = QComboBox()
+        self.combo_ime_policy.addItem("⌨️ PC Window (Local)", "local")
+        self.combo_ime_policy.addItem("🚫 Hidden", "hide")
+        self.combo_ime_policy.addItem("📱 Phone Display 0", "fallback")
+        cur_ime = self.config.get("display_ime_policy", "local") if self.config else "local"
+        ime_idx = self.combo_ime_policy.findData(cur_ime)
+        if ime_idx >= 0:
+            self.combo_ime_policy.setCurrentIndex(ime_idx)
+        self.combo_ime_policy.setToolTip("Select where the software on-screen keyboard appears when typing in virtual displays")
+        self.combo_ime_policy.currentIndexChanged.connect(self._on_ime_policy_changed)
+        mode_layout.addWidget(self.combo_ime_policy)
+
         mode_layout.addStretch(1)
         main_layout.addWidget(mode_box)
 
@@ -526,6 +543,17 @@ class AppLauncherWidget(QWidget):
             self._populate_disp_presets()
             self.action_completed.emit("Preset Deleted", f"Deleted preset: {label}")
 
+    def _on_ime_policy_changed(self):
+        policy = self.combo_ime_policy.currentData() or "local"
+        if self.config:
+            self.config.set("display_ime_policy", policy)
+        if self.selected_serial:
+            self.adb.set_show_soft_keyboard(self.selected_serial, policy == "local")
+            if policy == "hide":
+                self.adb.send_keyevent(self.selected_serial, 111)
+        mode_desc = "Local (PC Virtual Display)" if policy == "local" else ("Hidden" if policy == "hide" else "Phone Display 0")
+        self.action_completed.emit("IME Policy Changed", f"Set virtual display keyboard to {mode_desc}")
+
     def _on_filter_toggled(self, checked: bool):
         if self.config:
             self.config.set("app_launcher_3rd_party_only", checked)
@@ -714,10 +742,12 @@ class AppLauncherWidget(QWidget):
         if self.chk_new_display.isChecked():
             res = self.combo_disp_res.currentData() or ""
             title = f"[{display}] {self.selected_serial}"
+            ime_policy = self.config.get("display_ime_policy", "local") if self.config else "local"
             settings = {
                 "start_app": package_name,
                 "new_display": True,
                 "new_display_res": res,
+                "display_ime_policy": ime_policy,
                 "stay_awake": True,
                 "force_stay_awake": True,
                 "sync_clipboard": True,

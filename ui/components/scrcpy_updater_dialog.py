@@ -263,3 +263,40 @@ class ScrcpyUpdaterDialog(QDialog):
         else:
             self.lbl_progress_status.setText(f"Installation error: {message}")
             QMessageBox.critical(self, "Update Failed", f"Failed to install Scrcpy update:\n\n{message}")
+
+    def _cleanup_workers(self):
+        checker = getattr(self, "checker", None)
+        downloader = getattr(self, "downloader", None)
+        self.checker = None
+        self.downloader = None
+
+        if checker:
+            try:
+                checker.check_finished.disconnect()
+            except Exception:
+                pass
+            if checker.isRunning():
+                checker.quit()
+                checker.wait(1000)
+
+        if downloader:
+            try:
+                downloader.progress.disconnect()
+                downloader.finished.disconnect()
+            except Exception:
+                pass
+            if downloader.isRunning():
+                downloader.quit()
+                downloader.wait(1000)
+
+    def reject(self):
+        self._cleanup_workers()
+        super().reject()
+
+    def accept(self):
+        self._cleanup_workers()
+        super().accept()
+
+    def closeEvent(self, event):
+        self._cleanup_workers()
+        super().closeEvent(event)

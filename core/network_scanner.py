@@ -39,6 +39,9 @@ def get_local_ip_and_subnet() -> Tuple[str, str]:
         return "127.0.0.1", "192.168.1."
 
 
+_ACTIVE_SCAN_WORKERS: Set["NetworkScannerWorker"] = set()
+
+
 class NetworkScannerWorker(QThread):
     """Multi-threaded asynchronous network scanner for wireless ADB endpoints."""
 
@@ -58,10 +61,20 @@ class NetworkScannerWorker(QThread):
         self.subnet_prefix = subnet_prefix
         self.scan_ports = scan_ports or [5555, 5556, 5557, 5558]
         self._running = True
+        self._executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
+
+    def start_scanning(self):
+        """Start thread safely and register in global reference set to prevent premature destruction."""
+        _ACTIVE_SCAN_WORKERS.add(self)
+        self.finished.connect(lambda: _ACTIVE_SCAN_WORKERS.discard(self))
+        self.start()
 
     def run(self):
         discovered: List[DiscoveredWirelessDevice] = []
         already_connected_serials: Set[str] = set()
+
+        if not self._running:
+            return
 
         try:
             connected = self.adb.list_devices()
@@ -70,12 +83,20 @@ class NetworkScannerWorker(QThread):
         except Exception:
             pass
 
+        if not self._running:
+            return
+
         # 1. First, check ADB mDNS discovery (Android 11+ Wireless Debugging)
         mdns_devices = self._scan_mdns()
         for dev in mdns_devices:
+            if not self._running:
+                return
             dev.is_already_connected = (dev.endpoint in already_connected_serials)
             discovered.append(dev)
             self.device_found.emit(dev)
+
+        if not self._running:
+            return
 
         # 2. Subnet port sweep (Port 5555 & common ports across all 254 subnet hosts)
         if not self.subnet_prefix:
@@ -95,10 +116,11 @@ class NetworkScannerWorker(QThread):
         total = len(targets)
         completed = 0
 
-        # Scan targets in parallel using 80 threads
-        with concurrent.futures.ThreadPoolExecutor(max_workers=80) as executor:
+        # Scan targets in parallel
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=80)
+        try:
             future_to_target = {
-                executor.submit(self._check_socket, ip, port): (ip, port)
+                self._executor.submit(self._check_socket, ip, port): (ip, port)
                 for (ip, port) in targets
             }
 
@@ -107,27 +129,42 @@ class NetworkScannerWorker(QThread):
                     break
                 completed += 1
                 if completed % 10 == 0 or completed == total:
-                    self.progress.emit(completed, total)
+                    if self._running:
+                        self.progress.emit(completed, total)
 
-                res = future.result()
-                if res:
+                try:
+                    res = future.result()
+                except Exception:
+                    res = None
+
+                if res and self._running:
                     ip, port = res
                     ep = f"{ip}:{port}"
                     if ep not in found_endpoints:
                         found_endpoints.add(ep)
-                        hostname = self._get_hostname(ip)
                         dev = DiscoveredWirelessDevice(
                             ip=ip,
                             port=port,
-                            hostname=hostname,
+                            hostname="",
                             is_already_connected=(ep in already_connected_serials)
                         )
                         discovered.append(dev)
-                        self.device_found.emit(dev)
+                        if self._running:
+                            self.device_found.emit(dev)
+        finally:
+            if self._executor:
+                try:
+                    self._executor.shutdown(wait=False, cancel_futures=True)
+                except Exception:
+                    pass
+                self._executor = None
 
-        self.scan_finished.emit(discovered)
+        if self._running:
+            self.scan_finished.emit(discovered)
 
-    def _check_socket(self, ip: str, port: int, timeout: float = 0.35) -> Optional[Tuple[str, int]]:
+    def _check_socket(self, ip: str, port: int, timeout: float = 0.25) -> Optional[Tuple[str, int]]:
+        if not self._running:
+            return None
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(timeout)
@@ -143,10 +180,11 @@ class NetworkScannerWorker(QThread):
         """Query adb mdns services for Android 11+ wireless debugging services."""
         devices = []
         try:
-            code, out, _ = self.adb._run_cmd(["mdns", "services"], timeout=5)
+            code, out, _ = self.adb._run_cmd(["mdns", "services"], timeout=2)
             if code == 0 and out:
-                # Output format: <service_name> <service_type> <ip:port>
                 for line in out.splitlines():
+                    if not self._running:
+                        break
                     line = line.strip()
                     if not line or "List of discovered" in line:
                         continue
@@ -161,18 +199,18 @@ class NetworkScannerWorker(QThread):
                                 ip=ip,
                                 port=port,
                                 service_name=name,
-                                hostname=self._get_hostname(ip)
+                                hostname=""
                             ))
         except Exception:
             pass
         return devices
 
-    def _get_hostname(self, ip: str) -> str:
-        try:
-            return socket.gethostbyaddr(ip)[0]
-        except Exception:
-            return ""
-
     def stop(self):
         self._running = False
-        self.wait(1000)
+        if self._executor:
+            try:
+                self._executor.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
+            self._executor = None
+        self.quit()

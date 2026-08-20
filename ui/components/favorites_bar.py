@@ -1,10 +1,12 @@
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
+    QFormLayout,
     QFrame,
     QGridLayout,
     QGroupBox,
@@ -15,6 +17,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -42,9 +45,37 @@ ICON_CHOICES = [
 
 
 class FavoriteAppEditDialog(QDialog):
-    """Dialog to add or edit a favorite app with custom name, icon, and display size preset."""
+    """Full-featured dialog to edit favorite app metadata, virtual display resolution, video framerate, bitrate, codecs, audio, and window flags."""
 
-    def __init__(self, config: ConfigManager, package: str = "", name: str = "", icon: str = "📱", display_res: str = "", is_edit: bool = False, parent=None):
+    def __init__(
+        self,
+        config: ConfigManager,
+        package: str = "",
+        name: str = "",
+        icon: str = "📱",
+        display_res: str = "",
+        # Video settings
+        bitrate: str = "",
+        max_fps: str = "",
+        video_codec: str = "",
+        rotation: str = "",
+        # Audio settings
+        audio_enabled: bool = True,
+        audio_codec: str = "",
+        audio_dup: bool = False,
+        # Window & Display flags
+        no_vd_system_decorations: bool = False,
+        always_on_top: bool = False,
+        borderless: bool = False,
+        turn_screen_off: bool = False,
+        stay_awake: bool = True,
+        show_touches: bool = False,
+        display_ime_policy: str = "",
+        custom_args: str = "",
+        active_defaults: Optional[Dict[str, Any]] = None,
+        is_edit: bool = False,
+        parent=None,
+    ):
         super().__init__(parent)
         self.config = config
         self.package_name = package
@@ -52,34 +83,70 @@ class FavoriteAppEditDialog(QDialog):
         self.icon = icon
         self.display_res = display_res
 
-        self.setWindowTitle("Edit Favorite App" if is_edit else "Add Favorite App")
-        self.setFixedSize(480, 310)
+        self.bitrate = bitrate
+        self.max_fps = max_fps
+        self.video_codec = video_codec
+        self.rotation = rotation
+
+        self.audio_enabled = audio_enabled
+        self.audio_codec = audio_codec
+        self.audio_dup = audio_dup
+
+        self.no_vd_system_decorations = no_vd_system_decorations
+        self.always_on_top = always_on_top
+        self.borderless = borderless
+        self.turn_screen_off = turn_screen_off
+        self.stay_awake = stay_awake
+        self.show_touches = show_touches
+        self.display_ime_policy = display_ime_policy
+        self.custom_args = custom_args
+
+        # Extract live global stream defaults
+        defs = active_defaults or {}
+        act_bitrate = defs.get("bitrate", "8M")
+        act_fps = defs.get("max_fps", "0")
+        act_fps_lbl = f"{act_fps} FPS" if act_fps and act_fps != "0" else "Device Max"
+        act_vcodec = defs.get("video_codec", "h264").upper()
+        act_acodec = defs.get("audio_codec", "opus").capitalize()
+
+        self.setWindowTitle(f"Configure '{name or package}'" if is_edit else "Add Favorite App")
+        self.setFixedWidth(580)
         self.setModal(True)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(12)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(18, 16, 18, 16)
+        main_layout.setSpacing(12)
+
+        self.tabs = QTabWidget()
+
+        # ==========================================
+        # TAB 1: 📱 General & Display Resolution
+        # ==========================================
+        tab_gen = QWidget()
+        l_gen = QVBoxLayout(tab_gen)
+        l_gen.setContentsMargins(12, 14, 12, 14)
+        l_gen.setSpacing(10)
 
         # App Display Name
-        layout.addWidget(QLabel("App Display Name / Label:"))
+        l_gen.addWidget(QLabel("App Display Name / Label:"))
         self.edit_name = QLineEdit(name)
-        self.edit_name.setPlaceholderText("e.g. Mashreq Banking, YouTube, Chrome")
-        layout.addWidget(self.edit_name)
+        self.edit_name.setPlaceholderText("e.g. WhatsApp, Banking, YouTube")
+        l_gen.addWidget(self.edit_name)
 
         # Package Name
-        layout.addWidget(QLabel("Package Name:"))
+        l_gen.addWidget(QLabel("Package Name:"))
         self.edit_pkg = QLineEdit(package)
-        self.edit_pkg.setPlaceholderText("e.g. com.mashreq.mobile")
+        self.edit_pkg.setPlaceholderText("e.g. com.whatsapp")
         if is_edit:
             self.edit_pkg.setReadOnly(True)
             self.edit_pkg.setStyleSheet("background-color: #171920; color: #64748B;")
-        layout.addWidget(self.edit_pkg)
+        l_gen.addWidget(self.edit_pkg)
 
         # Icon Row
         row_icon = QHBoxLayout()
         row_icon.setSpacing(10)
         lbl_icon = QLabel("Fallback Icon:")
-        lbl_icon.setFixedWidth(130)
+        lbl_icon.setFixedWidth(110)
         row_icon.addWidget(lbl_icon)
         self.combo_icon = QComboBox()
         self.combo_icon.view().setMinimumWidth(240)
@@ -95,14 +162,13 @@ class FavoriteAppEditDialog(QDialog):
         btn_fetch_web.setStyleSheet("font-size: 11px; padding: 2px 8px; color: #38BDF8;")
         btn_fetch_web.clicked.connect(self._fetch_web_icon)
         row_icon.addWidget(btn_fetch_web)
+        l_gen.addLayout(row_icon)
 
-        layout.addLayout(row_icon)
-
-        # Display Preset Row
+        # Display Size Preset Row
         row_preset = QHBoxLayout()
         row_preset.setSpacing(10)
         lbl_preset = QLabel("Display Size Preset:")
-        lbl_preset.setFixedWidth(130)
+        lbl_preset.setFixedWidth(110)
         row_preset.addWidget(lbl_preset)
         self.combo_preset = QComboBox()
         self.combo_preset.view().setMinimumWidth(320)
@@ -115,23 +181,207 @@ class FavoriteAppEditDialog(QDialog):
             if p_idx >= 0:
                 self.combo_preset.setCurrentIndex(p_idx)
         row_preset.addWidget(self.combo_preset, 1)
-        layout.addLayout(row_preset)
+        l_gen.addLayout(row_preset)
 
-        layout.addStretch(1)
+        # Clean Display Checkbox
+        self.chk_clean_vd = QCheckBox("🪟 Clean Display (Hide status && navigation bars: --no-vd-system-decorations)")
+        self.chk_clean_vd.setChecked(bool(no_vd_system_decorations))
+        self.chk_clean_vd.setToolTip("Gives an edge-to-edge full-bleed window without top clock or bottom back/home buttons")
+        l_gen.addWidget(self.chk_clean_vd)
 
-        # Buttons
+        l_gen.addStretch(1)
+        self.tabs.addTab(tab_gen, "📱 General && Display")
+
+        # ==========================================
+        # TAB 2: 🎥 Video & Audio (Framerate, Bitrate, Codecs)
+        # ==========================================
+        tab_media = QWidget()
+        l_media = QVBoxLayout(tab_media)
+        l_media.setContentsMargins(12, 14, 12, 14)
+        l_media.setSpacing(10)
+
+        form_v = QFormLayout()
+        form_v.setLabelAlignment(Qt.AlignLeft)
+        form_v.setSpacing(10)
+
+        # Video Bitrate
+        self.combo_bitrate = QComboBox()
+        self.combo_bitrate.addItem(f"🌐 Global Default ({act_bitrate})", "")
+        self.combo_bitrate.addItem("2 Mbps (Low Bandwidth)", "2M")
+        self.combo_bitrate.addItem("4 Mbps (Moderate)", "4M")
+        self.combo_bitrate.addItem("8 Mbps (Standard FHD)", "8M")
+        self.combo_bitrate.addItem("12 Mbps (High Quality)", "12M")
+        self.combo_bitrate.addItem("16 Mbps (Crisp 2K / 60fps)", "16M")
+        self.combo_bitrate.addItem("24 Mbps (Ultra High Quality)", "24M")
+        self.combo_bitrate.addItem("32 Mbps (Lossless / High Bitrate)", "32M")
+        if bitrate:
+            b_idx = self.combo_bitrate.findData(bitrate)
+            if b_idx >= 0:
+                self.combo_bitrate.setCurrentIndex(b_idx)
+            else:
+                self.combo_bitrate.addItem(f"Custom ({bitrate})", bitrate)
+                self.combo_bitrate.setCurrentIndex(self.combo_bitrate.count() - 1)
+        form_v.addRow("Video Bitrate:", self.combo_bitrate)
+
+        # Max Framerate
+        self.combo_fps = QComboBox()
+        self.combo_fps.addItem(f"🌐 Global Default ({act_fps_lbl})", "")
+        self.combo_fps.addItem("30 FPS", "30")
+        self.combo_fps.addItem("60 FPS (Smooth)", "60")
+        self.combo_fps.addItem("90 FPS (High Refresh)", "90")
+        self.combo_fps.addItem("120 FPS (Ultra Smooth)", "120")
+        if max_fps:
+            fps_idx = self.combo_fps.findData(max_fps)
+            if fps_idx >= 0:
+                self.combo_fps.setCurrentIndex(fps_idx)
+            else:
+                self.combo_fps.addItem(f"Custom ({max_fps} FPS)", max_fps)
+                self.combo_fps.setCurrentIndex(self.combo_fps.count() - 1)
+        form_v.addRow("Max Framerate:", self.combo_fps)
+
+        # Video Codec
+        self.combo_vcodec = QComboBox()
+        self.combo_vcodec.addItem(f"🌐 Global Default ({act_vcodec})", "")
+        self.combo_vcodec.addItem("H.264 (Highest Compatibility)", "h264")
+        self.combo_vcodec.addItem("H.265 / HEVC (High Efficiency)", "h265")
+        self.combo_vcodec.addItem("AV1 (Next-Gen)", "av1")
+        if video_codec:
+            vc_idx = self.combo_vcodec.findData(video_codec.lower())
+            if vc_idx >= 0:
+                self.combo_vcodec.setCurrentIndex(vc_idx)
+        form_v.addRow("Video Codec:", self.combo_vcodec)
+
+        # Video Orientation Lock
+        self.combo_rotation = QComboBox()
+        self.combo_rotation.addItem("Auto / Natural Orientation (0°)", "")
+        self.combo_rotation.addItem("90° (Clockwise Landscape)", "90")
+        self.combo_rotation.addItem("180° (Inverted Portrait)", "180")
+        self.combo_rotation.addItem("270° (Counter-Clockwise Landscape)", "270")
+        if rotation:
+            r_idx = self.combo_rotation.findData(rotation)
+            if r_idx >= 0:
+                self.combo_rotation.setCurrentIndex(r_idx)
+        form_v.addRow("Orientation Lock:", self.combo_rotation)
+
+        l_media.addLayout(form_v)
+
+        # Audio Section
+        grp_audio = QGroupBox("🔊 Audio Streaming")
+        l_aud = QVBoxLayout(grp_audio)
+        l_aud.setSpacing(6)
+
+        self.chk_audio = QCheckBox("Forward Audio to PC")
+        self.chk_audio.setChecked(bool(audio_enabled))
+        l_aud.addWidget(self.chk_audio)
+
+        row_acodec = QHBoxLayout()
+        row_acodec.addWidget(QLabel("Audio Codec:"))
+        self.combo_acodec = QComboBox()
+        self.combo_acodec.addItem(f"🌐 Global Default ({act_acodec})", "")
+        self.combo_acodec.addItem("Opus (Recommended)", "opus")
+        self.combo_acodec.addItem("AAC", "aac")
+        self.combo_acodec.addItem("RAW (Low Latency)", "raw")
+        self.combo_acodec.addItem("FLAC (Lossless)", "flac")
+        if audio_codec:
+            ac_idx = self.combo_acodec.findData(audio_codec.lower())
+            if ac_idx >= 0:
+                self.combo_acodec.setCurrentIndex(ac_idx)
+        row_acodec.addWidget(self.combo_acodec, 1)
+        l_aud.addLayout(row_acodec)
+
+        self.chk_audio_dup = QCheckBox("Duplicate Audio (Play simultaneously on PC and Device)")
+        self.chk_audio_dup.setChecked(bool(audio_dup))
+        l_aud.addWidget(self.chk_audio_dup)
+
+        l_media.addWidget(grp_audio)
+        l_media.addStretch(1)
+        self.tabs.addTab(tab_media, "🎥 Video && Audio")
+
+        # ==========================================
+        # TAB 3: 🪟 Window & Device Flags
+        # ==========================================
+        tab_adv = QWidget()
+        l_adv = QVBoxLayout(tab_adv)
+        l_adv.setContentsMargins(12, 14, 12, 14)
+        l_adv.setSpacing(10)
+
+        # Window Behavior
+        grp_win = QGroupBox("🪟 Desktop Window Behavior")
+        l_win = QVBoxLayout(grp_win)
+        l_win.setSpacing(8)
+
+        self.chk_always_on_top = QCheckBox("📌 Always on Top (--always-on-top)")
+        self.chk_always_on_top.setChecked(bool(always_on_top))
+        l_win.addWidget(self.chk_always_on_top)
+
+        self.chk_borderless = QCheckBox("🔲 Borderless Window (--window-borderless)")
+        self.chk_borderless.setChecked(bool(borderless))
+        l_win.addWidget(self.chk_borderless)
+
+        l_adv.addWidget(grp_win)
+
+        # Device & Power
+        grp_dev = QGroupBox("📱 Device & Input Behavior")
+        l_dev = QVBoxLayout(grp_dev)
+        l_dev.setSpacing(8)
+
+        self.chk_turn_screen_off = QCheckBox("🌑 Turn Physical Screen Off during session (--turn-screen-off)")
+        self.chk_turn_screen_off.setChecked(bool(turn_screen_off))
+        l_dev.addWidget(self.chk_turn_screen_off)
+
+        self.chk_stay_awake = QCheckBox("💡 Keep Device Awake (--stay-awake)")
+        self.chk_stay_awake.setChecked(bool(stay_awake))
+        l_dev.addWidget(self.chk_stay_awake)
+
+        self.chk_show_touches = QCheckBox("👆 Show Touches / Tap Circles (--show-touches)")
+        self.chk_show_touches.setChecked(bool(show_touches))
+        l_dev.addWidget(self.chk_show_touches)
+
+        # IME Policy
+        row_ime = QHBoxLayout()
+        row_ime.addWidget(QLabel("IME Policy:"))
+        self.combo_ime = QComboBox()
+        self.combo_ime.addItem("🌐 Global Setting Default", "")
+        self.combo_ime.addItem("⌨️ Local (Show soft keyboard on PC Display)", "local")
+        self.combo_ime.addItem("🚫 Hidden (Suppress soft keyboard)", "hide")
+        self.combo_ime.addItem("📱 Phone (Show soft keyboard on Phone Display 0)", "fallback")
+        if display_ime_policy:
+            ime_idx = self.combo_ime.findData(display_ime_policy)
+            if ime_idx >= 0:
+                self.combo_ime.setCurrentIndex(ime_idx)
+        row_ime.addWidget(self.combo_ime, 1)
+        l_dev.addLayout(row_ime)
+
+        l_adv.addWidget(grp_dev)
+
+        # Custom Arguments
+        row_args = QHBoxLayout()
+        lbl_args = QLabel("Custom Args:")
+        lbl_args.setFixedWidth(80)
+        row_args.addWidget(lbl_args)
+        self.edit_custom_args = QLineEdit(custom_args)
+        self.edit_custom_args.setPlaceholderText("e.g. --max-size=1920 --video-bit-rate=12M")
+        row_args.addWidget(self.edit_custom_args, 1)
+        l_adv.addLayout(row_args)
+
+        l_adv.addStretch(1)
+        self.tabs.addTab(tab_adv, "🛠️ Window && Controls")
+
+        main_layout.addWidget(self.tabs)
+
+        # Bottom Action Buttons
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
         btn_cancel = QPushButton("Cancel")
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(btn_cancel)
 
-        btn_save = QPushButton("Save" if is_edit else "Add Favorite")
+        btn_save = QPushButton("Save Settings" if is_edit else "Add Favorite")
         btn_save.setObjectName("primaryBtn")
         btn_save.clicked.connect(self._on_save)
         btn_row.addWidget(btn_save)
 
-        layout.addLayout(btn_row)
+        main_layout.addLayout(btn_row)
 
     def _fetch_web_icon(self):
         pkg = self.edit_pkg.text().strip()
@@ -151,6 +401,24 @@ class FavoriteAppEditDialog(QDialog):
         self.display_name = name or pkg.split(".")[-1].capitalize()
         self.icon = self.combo_icon.currentData() or "📱"
         self.display_res = self.combo_preset.currentData() or ""
+
+        self.bitrate = self.combo_bitrate.currentData() or ""
+        self.max_fps = self.combo_fps.currentData() or ""
+        self.video_codec = self.combo_vcodec.currentData() or ""
+        self.rotation = self.combo_rotation.currentData() or ""
+
+        self.audio_enabled = self.chk_audio.isChecked()
+        self.audio_codec = self.combo_acodec.currentData() or "opus"
+        self.audio_dup = self.chk_audio_dup.isChecked()
+
+        self.no_vd_system_decorations = self.chk_clean_vd.isChecked()
+        self.always_on_top = self.chk_always_on_top.isChecked()
+        self.borderless = self.chk_borderless.isChecked()
+        self.turn_screen_off = self.chk_turn_screen_off.isChecked()
+        self.stay_awake = self.chk_stay_awake.isChecked()
+        self.show_touches = self.chk_show_touches.isChecked()
+        self.display_ime_policy = self.combo_ime.currentData() or ""
+        self.custom_args = self.edit_custom_args.text().strip()
         self.accept()
 
 
@@ -169,6 +437,7 @@ class FavoriteAppsBar(QFrame):
         self.icon_manager = IconManager.get_instance()
         self.icon_manager.icon_ready.connect(self._on_icon_ready)
         self.chip_buttons: Dict[str, QPushButton] = {}
+        self.active_stream_getter = None
 
         self.setObjectName("favoriteAppsCard")
         self.setStyleSheet(
@@ -440,7 +709,7 @@ class FavoriteAppsBar(QFrame):
         act_web_icon = menu.addAction("🌐 Fetch Official Icon from Web Store (Google Play)")
         menu.addSeparator()
 
-        act_edit = menu.addAction(f"✏️ Rename & Customize...")
+        act_edit = menu.addAction("⚙️ Configure App Settings...")
 
         # Submenu for Display Presets
         menu_presets = menu.addMenu(f"📐 Display Size Preset ({cur_res if cur_res else 'Global Default'})")
@@ -457,6 +726,17 @@ class FavoriteAppsBar(QFrame):
             if cur_res == p_val and p_val:
                 act_p.setIcon(menu.style().standardIcon(menu.style().StandardPixmap.SP_DialogApplyButton))
             act_p.triggered.connect(lambda _, v=p_val: self._set_fav_preset(package, name, fav.get("icon", "📱"), v))
+
+        menu_presets.addSeparator()
+        if cur_res:
+            act_edit_cur = menu_presets.addAction("✏️ Edit Selected Preset...")
+            act_edit_cur.triggered.connect(lambda _, v=cur_res: self._edit_preset_dialog(v))
+
+        act_add_new = menu_presets.addAction("➕ Create New Preset...")
+        act_add_new.triggered.connect(self._create_new_preset_dialog)
+
+        act_manage_app = menu_presets.addAction("⚙️ Manage Presets in App Launcher...")
+        act_manage_app.triggered.connect(lambda: self.open_apps_manager_requested.emit())
 
         menu.addSeparator()
         act_shortcut = menu.addAction("📌 Create Desktop Shortcut (.lnk)")
@@ -486,6 +766,11 @@ class FavoriteAppsBar(QFrame):
                 win_w=win_w,
                 win_h=win_h,
                 icon_png=icon_path,
+                no_vd_decorations=fav.get("no_vd_system_decorations", False),
+                always_on_top=fav.get("always_on_top", False),
+                borderless=fav.get("borderless", False),
+                custom_args=fav.get("custom_args", ""),
+                ime_policy=fav.get("display_ime_policy", ""),
             )
             if ok:
                 QMessageBox.information(self, "Shortcut Created", f"Successfully created desktop shortcut:\n\n{msg}")
@@ -498,29 +783,158 @@ class FavoriteAppsBar(QFrame):
             self.refresh_favorites()
 
     def _set_fav_preset(self, package: str, name: str, icon: str, preset_val: str):
-        self.config.update_favorite_app(package, name, icon, preset_val)
+        fav = next((f for f in self.config.get_favorite_apps() if f.get("package") == package), {})
+        self.config.update_favorite_app(
+            package=package,
+            name=name,
+            icon=icon,
+            display_res=preset_val,
+            no_vd_system_decorations=fav.get("no_vd_system_decorations", False),
+            always_on_top=fav.get("always_on_top", False),
+            borderless=fav.get("borderless", False),
+            audio_enabled=fav.get("audio_enabled", True),
+            custom_args=fav.get("custom_args", ""),
+            display_ime_policy=fav.get("display_ime_policy", ""),
+        )
         self.refresh_favorites()
 
     def _open_edit_dialog(self, fav: Dict):
+        active_stream = self.active_stream_getter() if callable(self.active_stream_getter) else {}
         dlg = FavoriteAppEditDialog(
             config=self.config,
             package=fav.get("package", ""),
             name=fav.get("name", ""),
             icon=fav.get("icon", "📱"),
             display_res=fav.get("display_res", ""),
+            bitrate=fav.get("bitrate", ""),
+            max_fps=fav.get("max_fps", ""),
+            video_codec=fav.get("video_codec", ""),
+            rotation=fav.get("rotation", ""),
+            audio_enabled=fav.get("audio_enabled", True),
+            audio_codec=fav.get("audio_codec", ""),
+            audio_dup=fav.get("audio_dup", False),
+            no_vd_system_decorations=fav.get("no_vd_system_decorations", False),
+            always_on_top=fav.get("always_on_top", False),
+            borderless=fav.get("borderless", False),
+            turn_screen_off=fav.get("turn_screen_off", False),
+            stay_awake=fav.get("stay_awake", True),
+            show_touches=fav.get("show_touches", False),
+            display_ime_policy=fav.get("display_ime_policy", ""),
+            custom_args=fav.get("custom_args", ""),
+            active_defaults=active_stream,
             is_edit=True,
-            parent=self
+            parent=self,
         )
         if dlg.exec() == QDialog.Accepted:
-            self.config.update_favorite_app(dlg.package_name, dlg.display_name, dlg.icon, dlg.display_res)
+            self.config.update_favorite_app(
+                package=dlg.package_name,
+                name=dlg.display_name,
+                icon=dlg.icon,
+                display_res=dlg.display_res,
+                bitrate=dlg.bitrate,
+                max_fps=dlg.max_fps,
+                video_codec=dlg.video_codec,
+                rotation=dlg.rotation,
+                audio_enabled=dlg.audio_enabled,
+                audio_codec=dlg.audio_codec,
+                audio_dup=dlg.audio_dup,
+                no_vd_system_decorations=dlg.no_vd_system_decorations,
+                always_on_top=dlg.always_on_top,
+                borderless=dlg.borderless,
+                turn_screen_off=dlg.turn_screen_off,
+                stay_awake=dlg.stay_awake,
+                show_touches=dlg.show_touches,
+                display_ime_policy=dlg.display_ime_policy,
+                custom_args=dlg.custom_args,
+            )
             self.refresh_favorites()
 
     def _open_add_dialog(self):
+        active_stream = self.active_stream_getter() if callable(self.active_stream_getter) else {}
         dlg = FavoriteAppEditDialog(
             config=self.config,
+            active_defaults=active_stream,
             is_edit=False,
+            parent=self,
+        )
+        if dlg.exec() == QDialog.Accepted:
+            self.config.add_favorite_app(
+                package=dlg.package_name,
+                name=dlg.display_name,
+                icon=dlg.icon,
+                display_res=dlg.display_res,
+                bitrate=dlg.bitrate,
+                max_fps=dlg.max_fps,
+                video_codec=dlg.video_codec,
+                rotation=dlg.rotation,
+                audio_enabled=dlg.audio_enabled,
+                audio_codec=dlg.audio_codec,
+                audio_dup=dlg.audio_dup,
+                no_vd_system_decorations=dlg.no_vd_system_decorations,
+                always_on_top=dlg.always_on_top,
+                borderless=dlg.borderless,
+                turn_screen_off=dlg.turn_screen_off,
+                stay_awake=dlg.stay_awake,
+                show_touches=dlg.show_touches,
+                display_ime_policy=dlg.display_ime_policy,
+                custom_args=dlg.custom_args,
+            )
+            self.refresh_favorites()
+
+    def _create_new_preset_dialog(self):
+        from ui.components.app_launcher import AddDisplayPresetDialog
+        dlg = AddDisplayPresetDialog(title="Create Virtual Display Preset", parent=self)
+        if dlg.exec() == QDialog.Accepted:
+            if self.config:
+                self.config.add_virtual_display_preset(dlg.preset_label, dlg.preset_value, dlg.preset_win_w, dlg.preset_win_h)
+            self.refresh_favorites()
+
+    def _edit_preset_dialog(self, cur_val: str):
+        from ui.components.app_launcher import AddDisplayPresetDialog
+        preset = self.config.get_preset_by_value(cur_val) if self.config else None
+        if not preset:
+            return
+
+        label = preset.get("label", "")
+        clean_name = label
+        if "(" in clean_name:
+            clean_name = clean_name.split("(")[0].strip()
+        for prefix in ("📱", "💻", "🌐"):
+            clean_name = clean_name.replace(prefix, "").strip()
+
+        w, h, dpi = 1080, 1920, 0
+        try:
+            if "/" in cur_val:
+                res_part, dpi_part = cur_val.split("/")
+                dpi = int(dpi_part)
+            else:
+                res_part = cur_val
+            if "x" in res_part:
+                w_str, h_str = res_part.split("x")
+                w, h = int(w_str), int(h_str)
+        except Exception:
+            pass
+
+        win_w = int(preset.get("win_w", 0)) if str(preset.get("win_w", "")).isdigit() else 0
+        win_h = int(preset.get("win_h", 0)) if str(preset.get("win_h", "")).isdigit() else 0
+
+        dlg = AddDisplayPresetDialog(
+            title=f"Edit Preset ({cur_val})",
+            initial_name=clean_name,
+            initial_w=w,
+            initial_h=h,
+            initial_dpi=dpi,
+            initial_win_w=win_w,
+            initial_win_h=win_h,
             parent=self
         )
         if dlg.exec() == QDialog.Accepted:
-            self.config.add_favorite_app(dlg.package_name, dlg.display_name, dlg.icon, dlg.display_res)
+            if self.config:
+                self.config.update_virtual_display_preset(
+                    old_value=cur_val,
+                    new_label=dlg.preset_label,
+                    new_value=dlg.preset_value,
+                    win_w=str(dlg.preset_win_w),
+                    win_h=str(dlg.preset_win_h),
+                )
             self.refresh_favorites()

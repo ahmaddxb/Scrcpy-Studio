@@ -88,8 +88,11 @@ class DeviceCard(QFrame):
 
         # Connection badge (USB vs WiFi vs LAN/Ethernet)
         is_wireless = self.device.is_wireless or (":" in self.device.serial) or ("._tcp" in self.device.serial)
-        conn_type = getattr(self.device, "connection_type", "wifi" if is_wireless else "usb")
-        if not is_wireless or conn_type == "usb":
+        conn_type = getattr(self.device, "connection_type", "")
+        if not conn_type:
+            conn_type = "wifi" if is_wireless else "usb"
+
+        if not is_wireless and conn_type == "usb":
             conn_text = "🔌 USB"
             conn_color = "#6366F1"
         elif conn_type == "ethernet":
@@ -243,6 +246,14 @@ class DeviceCard(QFrame):
         self.is_running = running
         self.update_state(self.is_active, self.is_running, self.is_pinned, self.is_offline)
 
+    def update_device(self, device: AdbDevice, alias: str = "", is_active: bool = False, is_running: bool = False, is_pinned: bool = False, is_offline: bool = False):
+        """Update existing card widget in place without destroying layout or recreating window handles."""
+        self.device = device
+        self.alias = alias or device.display_name
+        self.name_label.setText(self.alias)
+        self.serial_label.setText(self.device.serial)
+        self.update_state(is_active, is_running, is_pinned, is_offline)
+
     def update_state(self, is_active: bool, is_running: bool, is_pinned: bool = False, is_offline: bool = False):
         self.is_active = is_active
         self.is_running = is_running
@@ -263,8 +274,11 @@ class DeviceCard(QFrame):
         self.status_dot.setStyleSheet(f"background-color: {dot_color}; border-radius: 5px;")
 
         is_wireless = self.device.is_wireless or (":" in self.device.serial) or ("._tcp" in self.device.serial)
-        conn_type = getattr(self.device, "connection_type", "wifi" if is_wireless else "usb")
-        if not is_wireless or conn_type == "usb":
+        conn_type = getattr(self.device, "connection_type", "")
+        if not conn_type:
+            conn_type = "wifi" if is_wireless else "usb"
+
+        if not is_wireless and conn_type == "usb":
             conn_text = "🔌 USB"
             conn_color = "#6366F1"
         elif conn_type == "ethernet":
@@ -315,12 +329,15 @@ class DeviceCard(QFrame):
             self.bat_label.setVisible(False)
 
         # 3. Toggle button visibility based on device state
+        show_disconnect = is_wireless and not self.is_offline
+        self.btn_close.setVisible(show_disconnect)
+        self.btn_card_disc.setVisible(show_disconnect)
+
         if self.is_offline:
             self.btn_reconnect.setVisible(True)
             self.btn_launch.setVisible(False)
             self.btn_otg.setVisible(False)
             self.btn_stop.setVisible(False)
-            self.btn_card_disc.setVisible(False)
             self.unauth_label.setText("⚪ Disconnected (Click Reconnect)")
             self.unauth_label.setStyleSheet("color: #64748B; font-size: 11px;")
             self.unauth_label.setVisible(True)

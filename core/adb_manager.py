@@ -65,10 +65,12 @@ class AdbManager:
             if os.name == "nt":
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                creationflags = subprocess.CREATE_NO_WINDOW
+                startupinfo.wShowWindow = 0
+                creationflags = subprocess.CREATE_NO_WINDOW | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
 
             proc = subprocess.run(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -244,6 +246,17 @@ class AdbManager:
         """Turn off device screen / sleep (KEYCODE_SLEEP = 223)."""
         return self.send_keyevent(serial, 223)
 
+    def get_show_soft_keyboard(self, serial: str) -> bool:
+        """Check if software on-screen keyboard is enabled when typing on PC."""
+        code, out, _ = self._run_cmd(["-s", serial, "shell", "settings", "get", "secure", "show_ime_with_hard_keyboard"], timeout=3)
+        return code == 0 and out.strip() == "1"
+
+    def set_show_soft_keyboard(self, serial: str, show: bool) -> bool:
+        """Toggle showing the software on-screen keyboard when physical/PC keyboard is active."""
+        val = "1" if show else "0"
+        code, _, _ = self._run_cmd(["-s", serial, "shell", "settings", "put", "secure", "show_ime_with_hard_keyboard", val], timeout=3)
+        return code == 0
+
     def get_current_focused_package(self, serial: str) -> Optional[str]:
         """Get the package name of the active app specifically on the physical phone screen (Display 0)."""
         # 1. Query Display 0 topResumedActivity from dumpsys activity activities (exact for multi-display)
@@ -363,11 +376,13 @@ class AdbManager:
             if os.name == "nt":
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                creationflags = subprocess.CREATE_NO_WINDOW
+                startupinfo.wShowWindow = 0
+                creationflags = subprocess.CREATE_NO_WINDOW | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
 
             with open(save_path, "wb") as f:
                 proc = subprocess.run(
                     cmd,
+                    stdin=subprocess.DEVNULL,
                     stdout=f,
                     stderr=subprocess.PIPE,
                     timeout=10,
@@ -520,7 +535,7 @@ class AdbDeviceScanner(QThread):
         self.adb = adb_manager
         self.interval_ms = interval_ms
         self._running = True
-        self._last_devices_fingerprint = ""
+        self._last_devices_fingerprint = "__INITIAL__"
 
     def run(self):
         while self._running:

@@ -27,6 +27,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "auto_refresh_interval_ms": 2000,
     "last_selected_serial": "",
     "recent_wireless_ips": [],
+    "pinned_devices": [],
     "active_preset": "Balanced (1080p 60fps 8M)",
     "presets": {
         "Balanced (1080p 60fps 8M)": {
@@ -214,19 +215,24 @@ class ConfigManager:
     def get_pinned_devices(self) -> list:
         return self.data.get("pinned_devices", [])
 
-    def pin_device(self, serial: str, name: str = "", is_wireless: bool = False) -> None:
+    def pin_device(self, serial: str, name: str = "", is_wireless: bool = False, connection_type: str = "") -> None:
         pinned = self.get_pinned_devices()
         clean_name = name.strip() if (name and name.strip() != serial) else serial
+        if not connection_type:
+            connection_type = "wifi" if (is_wireless or ":" in serial) else "usb"
         for p in pinned:
             if p.get("serial") == serial:
                 if clean_name != serial or not p.get("name"):
                     p["name"] = clean_name
+                p["is_wireless"] = is_wireless
+                p["connection_type"] = connection_type
                 self.save()
                 return
         pinned.append({
             "serial": serial,
             "name": clean_name,
-            "is_wireless": is_wireless
+            "is_wireless": is_wireless,
+            "connection_type": connection_type
         })
         self.data["pinned_devices"] = pinned
         self.save()
@@ -342,7 +348,28 @@ class ConfigManager:
         ]
         return self.data.get("favorite_apps", default_favs)
 
-    def add_favorite_app(self, package: str, name: str = "", icon: str = "📱", display_res: str = "") -> None:
+    def add_favorite_app(
+        self,
+        package: str,
+        name: str = "",
+        icon: str = "📱",
+        display_res: str = "",
+        bitrate: str = "",
+        max_fps: str = "",
+        video_codec: str = "",
+        rotation: str = "",
+        audio_enabled: bool = True,
+        audio_codec: str = "",
+        audio_dup: bool = False,
+        no_vd_system_decorations: bool = False,
+        always_on_top: bool = False,
+        borderless: bool = False,
+        turn_screen_off: bool = False,
+        stay_awake: bool = True,
+        show_touches: bool = False,
+        custom_args: str = "",
+        display_ime_policy: str = "",
+    ) -> None:
         favs = self.get_favorite_apps()
         for f in favs:
             if f.get("package") == package:
@@ -350,8 +377,23 @@ class ConfigManager:
                     f["name"] = name
                 if icon:
                     f["icon"] = icon
-                if display_res:
+                if display_res is not None:
                     f["display_res"] = display_res
+                f["bitrate"] = bitrate
+                f["max_fps"] = max_fps
+                f["video_codec"] = video_codec
+                f["rotation"] = rotation
+                f["audio_enabled"] = audio_enabled
+                f["audio_codec"] = audio_codec
+                f["audio_dup"] = audio_dup
+                f["no_vd_system_decorations"] = no_vd_system_decorations
+                f["always_on_top"] = always_on_top
+                f["borderless"] = borderless
+                f["turn_screen_off"] = turn_screen_off
+                f["stay_awake"] = stay_awake
+                f["show_touches"] = show_touches
+                f["custom_args"] = custom_args
+                f["display_ime_policy"] = display_ime_policy
                 self.data["favorite_apps"] = favs
                 self.save()
                 return
@@ -359,22 +401,69 @@ class ConfigManager:
             "name": name or package.split(".")[-1].capitalize(),
             "package": package,
             "icon": icon,
-            "display_res": display_res
+            "display_res": display_res,
+            "bitrate": bitrate,
+            "max_fps": max_fps,
+            "video_codec": video_codec,
+            "rotation": rotation,
+            "audio_enabled": audio_enabled,
+            "audio_codec": audio_codec,
+            "audio_dup": audio_dup,
+            "no_vd_system_decorations": no_vd_system_decorations,
+            "always_on_top": always_on_top,
+            "borderless": borderless,
+            "turn_screen_off": turn_screen_off,
+            "stay_awake": stay_awake,
+            "show_touches": show_touches,
+            "custom_args": custom_args,
+            "display_ime_policy": display_ime_policy,
         })
         self.data["favorite_apps"] = favs
         self.save()
 
-    def update_favorite_app(self, package: str, name: str, icon: str = "📱", display_res: str = "") -> None:
-        favs = self.get_favorite_apps()
-        for f in favs:
-            if f.get("package") == package:
-                f["name"] = name
-                f["icon"] = icon
-                f["display_res"] = display_res
-                self.data["favorite_apps"] = favs
-                self.save()
-                return
-        self.add_favorite_app(package, name, icon, display_res)
+    def update_favorite_app(
+        self,
+        package: str,
+        name: str,
+        icon: str = "📱",
+        display_res: str = "",
+        bitrate: str = "",
+        max_fps: str = "",
+        video_codec: str = "",
+        rotation: str = "",
+        audio_enabled: bool = True,
+        audio_codec: str = "",
+        audio_dup: bool = False,
+        no_vd_system_decorations: bool = False,
+        always_on_top: bool = False,
+        borderless: bool = False,
+        turn_screen_off: bool = False,
+        stay_awake: bool = True,
+        show_touches: bool = False,
+        custom_args: str = "",
+        display_ime_policy: str = "",
+    ) -> None:
+        self.add_favorite_app(
+            package=package,
+            name=name,
+            icon=icon,
+            display_res=display_res,
+            bitrate=bitrate,
+            max_fps=max_fps,
+            video_codec=video_codec,
+            rotation=rotation,
+            audio_enabled=audio_enabled,
+            audio_codec=audio_codec,
+            audio_dup=audio_dup,
+            no_vd_system_decorations=no_vd_system_decorations,
+            always_on_top=always_on_top,
+            borderless=borderless,
+            turn_screen_off=turn_screen_off,
+            stay_awake=stay_awake,
+            show_touches=show_touches,
+            custom_args=custom_args,
+            display_ime_policy=display_ime_policy,
+        )
 
     def remove_favorite_app(self, package: str) -> None:
         favs = self.get_favorite_apps()
@@ -458,7 +547,7 @@ class ConfigManager:
         # Default destination for downloads
         return project_root / "scrcpy"
 
-    _cached_scrcpy_version: Optional[str] = None
+    _cached_scrcpy_version: Optional[str] = "v4.1"
 
     def get_scrcpy_version(self, force_refresh: bool = False) -> str:
         """Query real Scrcpy version directly from the scrcpy.exe binary (cached in memory for instantaneous lookup)."""
@@ -474,9 +563,11 @@ class ConfigManager:
                 if os.name == "nt":
                     startupinfo = subprocess.STARTUPINFO()
                     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                    creationflags = subprocess.CREATE_NO_WINDOW
+                    startupinfo.wShowWindow = 0
+                    creationflags = subprocess.CREATE_NO_WINDOW | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
                 r = subprocess.run(
                     [str(scrcpy_exe), "--version"],
+                    stdin=subprocess.DEVNULL,
                     capture_output=True,
                     text=True,
                     timeout=2,

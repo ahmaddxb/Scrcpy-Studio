@@ -36,11 +36,22 @@ def create_windows_shortcut(
         ps_commands.append("$s.Save()")
 
         ps_script = "; ".join(ps_commands)
+        startupinfo = None
+        creationflags = 0
+        if os.name == "nt":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0
+            creationflags = subprocess.CREATE_NO_WINDOW | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+
         subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=5,
+            startupinfo=startupinfo,
+            creationflags=creationflags,
         )
         return lnk_path.exists()
     except Exception as e:
@@ -77,6 +88,11 @@ def create_app_desktop_shortcut(
     win_w: str = "",
     win_h: str = "",
     icon_png: str = "",
+    no_vd_decorations: bool = False,
+    always_on_top: bool = False,
+    borderless: bool = False,
+    custom_args: str = "",
+    ime_policy: str = "",
 ) -> Tuple[bool, str]:
     """Generate a 1-click standalone desktop shortcut for an Android app."""
     try:
@@ -98,13 +114,28 @@ def create_app_desktop_shortcut(
         else:
             args.append("--new-display")
 
+        if no_vd_decorations:
+            args.append("--no-vd-system-decorations")
+
+        if ime_policy:
+            args.append(f"--display-ime-policy={ime_policy}")
+
+        if always_on_top:
+            args.append("--always-on-top")
+
+        if borderless:
+            args.append("--window-borderless")
+
         if win_w:
             args.append(f"--window-width={win_w}")
         if win_h:
             args.append(f"--window-height={win_h}")
 
         args.append("--stay-awake")
-        args.append(f"--start-app={package}")
+        args.append(f"--start-app=+{package}")
+
+        if custom_args:
+            args.append(custom_args.strip())
 
         args_str = " ".join(args)
 

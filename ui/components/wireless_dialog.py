@@ -97,8 +97,14 @@ class WirelessDialog(QDialog):
 
         # Progress bar & Status
         self.progress_bar = QProgressBar()
-        self.progress_bar.setFixedHeight(5)
+        self.progress_bar.setFixedHeight(14)
+        self.progress_bar.setAlignment(Qt.AlignCenter)
+        self.progress_bar.setTextVisible(True)
         self.progress_bar.setVisible(False)
+        self.progress_bar.setStyleSheet(
+            "QProgressBar { background-color: #1A1D26; border: 1px solid #2B303E; border-radius: 7px; text-align: center; color: #FFFFFF; font-size: 10px; font-weight: bold; } "
+            "QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284C7, stop:1 #38BDF8); border-radius: 6px; }"
+        )
         l_scan.addWidget(self.progress_bar)
 
         self.lbl_scan_status = QLabel("Ready to scan local network for wireless devices.")
@@ -280,15 +286,18 @@ class WirelessDialog(QDialog):
         self.lbl_scan_status.setText(f"Scanning subnet {subnet}0/24 on port 5555 and mDNS...")
         self.lbl_scan_status.setStyleSheet("color: #38BDF8;")
 
-        self.scanner_worker = NetworkScannerWorker(self.adb, subnet_prefix=subnet, parent=self)
+        self.scanner_worker = NetworkScannerWorker(self.adb, subnet_prefix=subnet, parent=None)
         self.scanner_worker.device_found.connect(self._on_device_discovered)
         self.scanner_worker.progress.connect(self._on_scan_progress)
         self.scanner_worker.scan_finished.connect(self._on_scan_finished)
-        self.scanner_worker.start()
+        self.scanner_worker.start_scanning()
 
     def _on_scan_progress(self, current: int, total: int):
         self.progress_bar.setMaximum(total)
         self.progress_bar.setValue(current)
+        if total > 0:
+            pct = int((current / total) * 100)
+            self.btn_scan.setText(f"⏳ Scanning ({pct}%)...")
 
     def _on_device_discovered(self, dev: DiscoveredWirelessDevice):
         row = self.table_devs.rowCount()
@@ -475,7 +484,33 @@ class WirelessDialog(QDialog):
             self.lbl_pair_status.setText(f"Pairing failed: {msg}")
             self.lbl_pair_status.setStyleSheet("color: #EF4444;")
 
+    def _cleanup_worker(self):
+        worker = self.scanner_worker
+        self.scanner_worker = None
+        if worker:
+            try:
+                worker.device_found.disconnect()
+            except Exception:
+                pass
+            try:
+                worker.progress.disconnect()
+            except Exception:
+                pass
+            try:
+                worker.scan_finished.disconnect()
+            except Exception:
+                pass
+            if worker.isRunning():
+                worker.stop()
+
+    def reject(self):
+        self._cleanup_worker()
+        super().reject()
+
+    def accept(self):
+        self._cleanup_worker()
+        super().accept()
+
     def closeEvent(self, event):
-        if self.scanner_worker and self.scanner_worker.isRunning():
-            self.scanner_worker.stop()
+        self._cleanup_worker()
         super().closeEvent(event)

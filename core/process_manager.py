@@ -151,6 +151,13 @@ class ProcessManager(QObject):
             else:
                 args.append("--new-display")
 
+        if settings.get("no_vd_system_decorations", False):
+            args.append("--no-vd-system-decorations")
+
+        ime_policy = str(settings.get("display_ime_policy", "")).strip()
+        if ime_policy and ime_policy.lower() in ("local", "hide", "fallback"):
+            args.append(f"--display-ime-policy={ime_policy.lower()}")
+
         # Recording
         if settings.get("record", False):
             record_dir = settings.get("record_path", "")

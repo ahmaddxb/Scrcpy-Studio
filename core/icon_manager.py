@@ -37,12 +37,23 @@ class IconFetchRunnable(QRunnable):
         if not self.adb_bin or not self.serial or not Path(self.adb_bin).exists():
             return False, ""
         try:
+            startupinfo = None
+            creationflags = 0
+            if os.name == "nt":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 0
+                creationflags = subprocess.CREATE_NO_WINDOW | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+
             # 1. Get APK paths on device
             r = subprocess.run(
                 [self.adb_bin, "-s", self.serial, "shell", f"pm path {self.package_name}"],
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 timeout=4,
+                startupinfo=startupinfo,
+                creationflags=creationflags,
             )
             lines = [l.replace("package:", "").strip() for l in r.stdout.splitlines() if l.startswith("package:")]
             if not lines:
@@ -53,9 +64,12 @@ class IconFetchRunnable(QRunnable):
             # 2. List APK files
             r2 = subprocess.run(
                 [self.adb_bin, "-s", self.serial, "shell", f'zipinfo -1 "{apk_path}"'],
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 timeout=4,
+                startupinfo=startupinfo,
+                creationflags=creationflags,
             )
             files = [f.strip() for f in r2.stdout.splitlines() if f.strip()]
 
@@ -86,8 +100,11 @@ class IconFetchRunnable(QRunnable):
             # 4. Stream icon bytes directly from device
             r3 = subprocess.run(
                 [self.adb_bin, "-s", self.serial, "exec-out", f'unzip -p "{apk_path}" "{best_icon}"'],
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 timeout=4,
+                startupinfo=startupinfo,
+                creationflags=creationflags,
             )
             if r3.returncode == 0 and len(r3.stdout) > 200:
                 self.cache_path.parent.mkdir(parents=True, exist_ok=True)

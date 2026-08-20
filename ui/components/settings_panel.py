@@ -89,7 +89,7 @@ class SettingsPanel(QWidget):
         d_layout.setContentsMargins(14, 16, 14, 16)
         d_layout.setSpacing(12)
 
-        self.chk_auto_reconnect = QCheckBox("⚡ Automatically reconnect to pinned wireless devices on startup")
+        self.chk_auto_reconnect = QCheckBox("⚡ Automatically reconnect to pinned wireless devices on startup (even if disconnected on exit)")
         self.chk_auto_reconnect.setStyleSheet("font-size: 13px; font-weight: 500; color: #F1F5F9;")
         self.chk_auto_reconnect.toggled.connect(self._on_setting_changed)
         d_layout.addWidget(self.chk_auto_reconnect)

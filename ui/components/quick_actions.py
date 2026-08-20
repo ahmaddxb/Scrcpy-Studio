@@ -153,6 +153,11 @@ class QuickActionBar(QFrame):
         grid.addWidget(self.btn_screen_off, 2, 2)
         grid.addWidget(self.btn_pull_app, 2, 3)
 
+        # Row 3: ADB Server Recovery
+        self.btn_restart_adb = self._create_btn("🔄 Restart ADB Server", self._restart_adb)
+        self.btn_restart_adb.setToolTip("Restart the local ADB server daemon")
+        grid.addWidget(self.btn_restart_adb, 3, 0, 1, 4)
+
         main_layout.addWidget(self.body_widget)
 
     def _pull_active_app(self):

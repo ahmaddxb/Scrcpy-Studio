@@ -192,8 +192,19 @@ class ScrcpyDownloadWorker(QThread):
             adb_exe = self.target_dir / "adb.exe"
             if adb_exe.exists():
                 creationflags = 0
+                startupinfo = None
                 if os.name == "nt":
-                    creationflags = subprocess.CREATE_NO_WINDOW
-                subprocess.run([str(adb_exe), "kill-server"], capture_output=True, timeout=3, creationflags=creationflags)
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = 0
+                    creationflags = subprocess.CREATE_NO_WINDOW | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+                subprocess.run(
+                    [str(adb_exe), "kill-server"],
+                    stdin=subprocess.DEVNULL,
+                    capture_output=True,
+                    timeout=3,
+                    startupinfo=startupinfo,
+                    creationflags=creationflags
+                )
         except Exception:
             pass

@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QThread, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -39,6 +39,38 @@ from ui.components.stream_panel import StreamPanel
 from ui.components.wireless_dialog import WirelessDialog
 
 
+class AdbScanWorker(QThread):
+    devices_ready = Signal(list)
+
+    def __init__(self, adb: AdbManager, parent=None):
+        super().__init__(parent)
+        self.adb = adb
+
+    def run(self):
+        try:
+            devs = self.adb.list_devices()
+            self.devices_ready.emit(devs)
+        except Exception:
+            self.devices_ready.emit([])
+
+
+class AutoReconnectWorker(QThread):
+    finished_reconnect = Signal()
+
+    def __init__(self, adb: AdbManager, serials: List[str], parent=None):
+        super().__init__(parent)
+        self.adb = adb
+        self.serials = serials
+
+    def run(self):
+        for s in self.serials:
+            try:
+                self.adb.connect_wireless(s)
+            except Exception:
+                pass
+        self.finished_reconnect.emit()
+
+
 class MainWindow(QMainWindow):
     """Main application window for Scrcpy Studio."""
 
@@ -63,6 +95,8 @@ class MainWindow(QMainWindow):
         self._update_header_runtime_status()
         self._setup_tray_icon()
         self._wire_signals()
+        # Immediately render initial pinned offline devices
+        self._on_devices_updated([])
         self._start_scanner()
         # Attempt auto-connecting to pinned wireless devices on startup
         QTimer.singleShot(500, self._auto_connect_pinned_devices)
@@ -161,6 +195,7 @@ class MainWindow(QMainWindow):
 
         self.btn_refresh = QPushButton("🔄 Refresh")
         self.btn_refresh.setCursor(Qt.PointingHandCursor)
+        self.btn_refresh.setFixedWidth(110)
         self.btn_refresh.clicked.connect(self._manual_refresh)
         header_layout.addWidget(self.btn_refresh)
 
@@ -342,6 +377,7 @@ class MainWindow(QMainWindow):
         self.stream_panel.settings_changed.connect(self._save_settings)
 
         # Favorite Apps Bar
+        self.favorites_bar.active_stream_getter = lambda: self.stream_panel.get_settings()
         self.favorites_bar.launch_app_requested.connect(self._on_favorite_app_launch)
         self.favorites_bar.pull_active_app_requested.connect(self._on_pull_active_phone_app)
         self.favorites_bar.open_apps_manager_requested.connect(lambda: self._switch_page(1))
@@ -394,16 +430,39 @@ class MainWindow(QMainWindow):
             return
         session_id = f"{serial}::{package}"
         title = f"[{name}] {serial}"
-        
+
+        # Per-app customization from favorite apps configuration
+        fav_entry = next((f for f in self.config.get_favorite_apps() if f.get("package") == package), {})
+        active_stream = self.stream_panel.get_settings() if hasattr(self, "stream_panel") else {}
+
         # Use specific preset configured for this favorite app, or fallback to global launcher preset
-        res = display_res if display_res else self.config.get("app_launcher_disp_res", "")
+        res = display_res if display_res else fav_entry.get("display_res", "")
+        if not res:
+            res = self.config.get("app_launcher_disp_res", "")
+
+        ime_policy = fav_entry.get("display_ime_policy") or self.config.get("display_ime_policy", "local")
+
         settings = {
             "start_app": package,
             "new_display": True,
             "new_display_res": res,
-            "stay_awake": True,
-            "force_stay_awake": True,
+            "bitrate": fav_entry.get("bitrate") or active_stream.get("bitrate", "8M"),
+            "max_fps": fav_entry.get("max_fps") or active_stream.get("max_fps", "0"),
+            "video_codec": fav_entry.get("video_codec") or active_stream.get("video_codec", "h264"),
+            "rotation": fav_entry.get("rotation") or active_stream.get("rotation", "0"),
+            "audio_enabled": fav_entry.get("audio_enabled", active_stream.get("audio_enabled", True)),
+            "audio_codec": fav_entry.get("audio_codec") or active_stream.get("audio_codec", "opus"),
+            "audio_dup": fav_entry.get("audio_dup", active_stream.get("audio_dup", False)),
+            "no_vd_system_decorations": fav_entry.get("no_vd_system_decorations", False),
+            "always_on_top": fav_entry.get("always_on_top", False),
+            "borderless": fav_entry.get("borderless", False),
+            "turn_screen_off": fav_entry.get("turn_screen_off", False),
+            "stay_awake": fav_entry.get("stay_awake", True),
+            "show_touches": fav_entry.get("show_touches", False),
+            "display_ime_policy": ime_policy,
+            "custom_args": fav_entry.get("custom_args", ""),
             "sync_clipboard": True,
+            "force_stay_awake": True,
         }
         if res:
             preset = self.config.get_preset_by_value(res)
@@ -414,7 +473,10 @@ class MainWindow(QMainWindow):
                     settings["window_height"] = preset["win_h"]
 
         res_info = f" ({res})" if res else " (Native)"
-        self._append_log("FavoriteApps", f"Launching favorite app '{name}' in virtual display window{res_info}...")
+        clean_info = " (Clean)" if settings.get("no_vd_system_decorations") else ""
+        fps_info = f" {settings.get('max_fps')}fps" if settings.get("max_fps") and settings.get("max_fps") != "0" else ""
+        bit_info = f" {settings.get('bitrate')}" if settings.get("bitrate") else ""
+        self._append_log("FavoriteApps", f"Launching favorite app '{name}' in virtual display window{res_info}{clean_info}{fps_info}{bit_info}...")
         self.process_manager.start_session(serial, settings, title, session_id=session_id)
 
     def _on_move_favorite_app_to_display(self, serial: str, package: str, name: str, display_res: str = ""):
@@ -434,14 +496,34 @@ class MainWindow(QMainWindow):
             self._append_log("AppTransfer", f"Opening dedicated Virtual Display window for '{name}' (awaiting display ID)...")
             self.pending_app_transfers[session_id] = (serial, package, name)
 
-            res = display_res if display_res else self.config.get("app_launcher_disp_res", "")
+            fav_entry = next((f for f in self.config.get_favorite_apps() if f.get("package") == package), {})
+            active_stream = self.stream_panel.get_settings() if hasattr(self, "stream_panel") else {}
+            res = display_res if display_res else fav_entry.get("display_res", "")
+            if not res:
+                res = self.config.get("app_launcher_disp_res", "")
+
+            ime_policy = fav_entry.get("display_ime_policy") or self.config.get("display_ime_policy", "local")
             title = f"[{name}] {serial}"
             settings = {
                 "new_display": True,
                 "new_display_res": res,
-                "stay_awake": True,
-                "force_stay_awake": True,
+                "bitrate": fav_entry.get("bitrate") or active_stream.get("bitrate", "8M"),
+                "max_fps": fav_entry.get("max_fps") or active_stream.get("max_fps", "0"),
+                "video_codec": fav_entry.get("video_codec") or active_stream.get("video_codec", "h264"),
+                "rotation": fav_entry.get("rotation") or active_stream.get("rotation", "0"),
+                "audio_enabled": fav_entry.get("audio_enabled", active_stream.get("audio_enabled", True)),
+                "audio_codec": fav_entry.get("audio_codec") or active_stream.get("audio_codec", "opus"),
+                "audio_dup": fav_entry.get("audio_dup", active_stream.get("audio_dup", False)),
+                "no_vd_system_decorations": fav_entry.get("no_vd_system_decorations", False),
+                "always_on_top": fav_entry.get("always_on_top", False),
+                "borderless": fav_entry.get("borderless", False),
+                "turn_screen_off": fav_entry.get("turn_screen_off", False),
+                "stay_awake": fav_entry.get("stay_awake", True),
+                "show_touches": fav_entry.get("show_touches", False),
+                "display_ime_policy": ime_policy,
+                "custom_args": fav_entry.get("custom_args", ""),
                 "sync_clipboard": True,
+                "force_stay_awake": True,
                 # Explicitly NO start_app so it pulls the existing task!
             }
             if res:
@@ -492,8 +574,38 @@ class MainWindow(QMainWindow):
         if not self._check_runtime_installed():
             return
         session_id = f"{serial}::{package}"
-        self._append_log("AppLauncher", f"Launching '{package}' in new virtual display window...")
-        self.process_manager.start_session(serial, settings, title, session_id=session_id)
+
+        # Merge with active global stream defaults (framerate, bitrate, codecs, etc.)
+        active_stream = self.stream_panel.get_settings() if hasattr(self, "stream_panel") else {}
+        fav_entry = next((f for f in self.config.get_favorite_apps() if f.get("package") == package), {})
+
+        final_settings = {
+            "bitrate": fav_entry.get("bitrate") or active_stream.get("bitrate", "8M"),
+            "max_fps": fav_entry.get("max_fps") or active_stream.get("max_fps", "0"),
+            "video_codec": fav_entry.get("video_codec") or active_stream.get("video_codec", "h264"),
+            "rotation": fav_entry.get("rotation") or active_stream.get("rotation", "0"),
+            "audio_enabled": fav_entry.get("audio_enabled", active_stream.get("audio_enabled", True)),
+            "audio_codec": fav_entry.get("audio_codec") or active_stream.get("audio_codec", "opus"),
+            "audio_dup": fav_entry.get("audio_dup", active_stream.get("audio_dup", False)),
+            "no_vd_system_decorations": fav_entry.get("no_vd_system_decorations", False),
+            "always_on_top": fav_entry.get("always_on_top", False),
+            "borderless": fav_entry.get("borderless", False),
+            "turn_screen_off": fav_entry.get("turn_screen_off", active_stream.get("turn_screen_off", False)),
+            "stay_awake": fav_entry.get("stay_awake", active_stream.get("stay_awake", True)),
+            "show_touches": fav_entry.get("show_touches", active_stream.get("show_touches", False)),
+            "display_ime_policy": fav_entry.get("display_ime_policy") or self.config.get("display_ime_policy", "local"),
+            "custom_args": fav_entry.get("custom_args", ""),
+            "sync_clipboard": True,
+            "force_stay_awake": True,
+        }
+        # Overlay settings provided by launcher (start_app, new_display, new_display_res, window_width, window_height)
+        final_settings.update({k: v for k, v in settings.items() if v is not None and v != ""})
+
+        fps_info = f" {final_settings.get('max_fps')}fps" if final_settings.get("max_fps") and final_settings.get("max_fps") != "0" else ""
+        bit_info = f" {final_settings.get('bitrate')}" if final_settings.get("bitrate") else ""
+        codec_info = f" {final_settings.get('video_codec', '').upper()}" if final_settings.get("video_codec") else ""
+        self._append_log("AppLauncher", f"Launching '{package}' in virtual display window{fps_info}{bit_info}{codec_info}...")
+        self.process_manager.start_session(serial, final_settings, title, session_id=session_id)
 
     def _on_icon_ready_log(self, pkg: str, path: str, source: str, detail: str):
         if source == "adb":
@@ -508,31 +620,68 @@ class MainWindow(QMainWindow):
         self.scanner.start()
 
     def _auto_connect_pinned_devices(self):
+        if not self.config.get("auto_reconnect_pinned", True):
+            return
         pinned = self.config.get_pinned_devices()
+        to_connect = []
         for p in pinned:
             serial = p.get("serial", "")
             # Only connect to wireless endpoints
             if serial and (":" in serial or p.get("is_wireless", False)):
                 if serial not in self.devices:
-                    self._append_log("System", f"Auto-reconnecting pinned device: {serial}...")
-                    self.adb.connect_wireless(serial)
+                    to_connect.append(serial)
+
+        if not to_connect:
+            return
+
+        self._append_log("System", f"Auto-reconnecting {len(to_connect)} pinned wireless device(s)...")
+        self._reconnect_worker = AutoReconnectWorker(self.adb, to_connect, self)
+        self._reconnect_worker.finished_reconnect.connect(self._manual_refresh)
+        self._reconnect_worker.finished.connect(self._reconnect_worker.deleteLater)
+        self._reconnect_worker.start()
+
+    def _create_device_card(
+        self,
+        dev: AdbDevice,
+        alias: str,
+        is_active: bool = False,
+        is_running: bool = False,
+        is_pinned: bool = False,
+        is_offline: bool = False
+    ) -> DeviceCard:
+        card = DeviceCard(
+            dev,
+            alias=alias,
+            is_active=is_active,
+            is_running=is_running,
+            is_pinned=is_pinned,
+            is_offline=is_offline,
+            parent=self
+        )
+        card.selected.connect(self._on_device_selected)
+        card.launch_requested.connect(lambda s=dev.serial: self._launch_device(s))
+        card.otg_requested.connect(lambda s=dev.serial: self._launch_device_otg(s))
+        card.stop_requested.connect(lambda s=dev.serial: self._stop_device(s))
+        card.disconnect_requested.connect(lambda s=dev.serial: self._on_disconnect_device(s))
+        card.connect_requested.connect(self._on_reconnect_pinned_device)
+        card.pin_toggled.connect(self._on_pin_toggled)
+        card.profile_requested.connect(self._open_device_profile_dialog)
+        return card
 
     def _on_devices_updated(self, device_list: List[AdbDevice]):
         self.devices = {d.serial: d for d in device_list}
         pinned_list = self.config.get_pinned_devices()
         pinned_map = {p["serial"]: p for p in pinned_list}
 
-        # Clean existing cards
-        for card in list(self.card_widgets.values()):
-            self.device_list_layout.removeWidget(card)
-            card.setParent(None)
-            card.deleteLater()
-        self.card_widgets.clear()
-
         # Count total active
         self.lbl_dev_count.setText(f"({len(device_list)})")
 
         if not device_list and not pinned_list:
+            for card in list(self.card_widgets.values()):
+                self.device_list_layout.removeWidget(card)
+                card.setParent(None)
+                card.deleteLater()
+            self.card_widgets.clear()
             self.empty_state_widget.setVisible(True)
             self.selected_serial = None
             self.quick_actions.set_device(None)
@@ -553,8 +702,10 @@ class MainWindow(QMainWindow):
             elif device_list:
                 self.selected_serial = device_list[0].serial
 
-        # 1. Render currently connected devices
         rendered_serials = set()
+        valid_serials = set(self.devices.keys()) | set(pinned_map.keys())
+
+        # 1. Update existing or render new currently connected devices
         for dev in device_list:
             rendered_serials.add(dev.serial)
             is_active = (dev.serial == self.selected_serial)
@@ -562,47 +713,79 @@ class MainWindow(QMainWindow):
             is_pinned = self.config.is_pinned(dev.serial)
             alias = self.config.get_device_alias(dev.serial, fallback=dev.display_name)
 
-            card = DeviceCard(
-                dev,
-                alias=alias,
-                is_active=is_active,
-                is_running=is_running,
-                is_pinned=is_pinned,
-                is_offline=False
-            )
-            card.selected.connect(self._on_device_selected)
-            card.launch_requested.connect(lambda s=dev.serial: self._launch_device(s))
-            card.otg_requested.connect(lambda s=dev.serial: self._launch_device_otg(s))
-            card.stop_requested.connect(lambda s=dev.serial: self._stop_device(s))
-            card.disconnect_requested.connect(lambda s=dev.serial: self._on_disconnect_device(s))
-            card.pin_toggled.connect(self._on_pin_toggled)
-            card.profile_requested.connect(self._open_device_profile_dialog)
-            self.device_list_layout.addWidget(card)
-            self.card_widgets[dev.serial] = card
+            if is_pinned:
+                cur_pinfo = pinned_map.get(dev.serial)
+                if cur_pinfo and cur_pinfo.get("connection_type") != dev.connection_type:
+                    cur_pinfo["connection_type"] = dev.connection_type
+                    self.config.pin_device(
+                        dev.serial,
+                        alias,
+                        is_wireless=dev.is_wireless or (":" in dev.serial),
+                        connection_type=dev.connection_type
+                    )
 
-        # 2. Render pinned devices that are currently offline / disconnected
+            if dev.serial in self.card_widgets:
+                self.card_widgets[dev.serial].update_device(
+                    dev,
+                    alias=alias,
+                    is_active=is_active,
+                    is_running=is_running,
+                    is_pinned=is_pinned,
+                    is_offline=False
+                )
+            else:
+                card = self._create_device_card(
+                    dev,
+                    alias=alias,
+                    is_active=is_active,
+                    is_running=is_running,
+                    is_pinned=is_pinned,
+                    is_offline=False
+                )
+                self.device_list_layout.addWidget(card)
+                self.card_widgets[dev.serial] = card
+
+        # 2. Update existing or render pinned devices that are currently offline / disconnected
         for serial, pinfo in pinned_map.items():
             if serial not in rendered_serials:
                 alias = self.config.get_device_alias(serial, fallback=pinfo.get("name", serial))
+                is_wireless = pinfo.get("is_wireless", (":" in serial))
+                conn_type = pinfo.get("connection_type", "wifi" if is_wireless else "usb")
                 offline_dev = AdbDevice(
                     serial=serial,
                     state="offline",
                     model=alias,
-                    is_wireless=pinfo.get("is_wireless", True)
+                    is_wireless=is_wireless,
+                    connection_type=conn_type
                 )
-                card = DeviceCard(
-                    offline_dev,
-                    alias=alias,
-                    is_active=False,
-                    is_running=False,
-                    is_pinned=True,
-                    is_offline=True
-                )
-                card.connect_requested.connect(self._on_reconnect_pinned_device)
-                card.pin_toggled.connect(self._on_pin_toggled)
-                card.profile_requested.connect(self._open_device_profile_dialog)
-                self.device_list_layout.addWidget(card)
-                self.card_widgets[serial] = card
+                if serial in self.card_widgets:
+                    self.card_widgets[serial].update_device(
+                        offline_dev,
+                        alias=alias,
+                        is_active=False,
+                        is_running=False,
+                        is_pinned=True,
+                        is_offline=True
+                    )
+                else:
+                    card = self._create_device_card(
+                        offline_dev,
+                        alias=alias,
+                        is_active=False,
+                        is_running=False,
+                        is_pinned=True,
+                        is_offline=True
+                    )
+                    self.device_list_layout.addWidget(card)
+                    self.card_widgets[serial] = card
+
+        # 3. Clean up stale cards
+        for serial in list(self.card_widgets.keys()):
+            if serial not in valid_serials:
+                card = self.card_widgets.pop(serial)
+                self.device_list_layout.removeWidget(card)
+                card.setParent(None)
+                card.deleteLater()
 
         self._update_selected_device_state()
 
@@ -624,10 +807,13 @@ class MainWindow(QMainWindow):
     def _on_pin_toggled(self, serial: str, is_pinned: bool):
         if is_pinned:
             dev_name = self.config.get_device_alias(serial, serial)
-            is_wireless = True
+            is_wireless = ":" in serial
+            conn_type = "wifi" if is_wireless else "usb"
             if serial in self.devices:
-                is_wireless = self.devices[serial].is_wireless or (":" in serial)
-            self.config.pin_device(serial, dev_name, is_wireless)
+                dev = self.devices[serial]
+                is_wireless = dev.is_wireless or (":" in serial)
+                conn_type = getattr(dev, "connection_type", "wifi" if is_wireless else "usb")
+            self.config.pin_device(serial, dev_name, is_wireless, connection_type=conn_type)
             self._append_log("System", f"Pinned device {dev_name} ({serial})")
         else:
             self.config.unpin_device(serial)
@@ -816,7 +1002,17 @@ class MainWindow(QMainWindow):
 
     def _manual_refresh(self):
         self._append_log("System", "Refreshing devices...")
-        devs = self.adb.list_devices()
+        self.btn_refresh.setEnabled(False)
+        self.btn_refresh.setText("🔄 Refreshing...")
+
+        self._refresh_worker = AdbScanWorker(self.adb, self)
+        self._refresh_worker.devices_ready.connect(self._on_manual_refresh_done)
+        self._refresh_worker.finished.connect(self._refresh_worker.deleteLater)
+        self._refresh_worker.start()
+
+    def _on_manual_refresh_done(self, devs: List[AdbDevice]):
+        self.btn_refresh.setEnabled(True)
+        self.btn_refresh.setText("🔄 Refresh")
         self._on_devices_updated(devs)
 
     def _open_wireless_dialog(self):
