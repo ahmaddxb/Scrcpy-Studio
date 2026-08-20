@@ -41,9 +41,9 @@
 * **Tray Quick-Launch**: Right-click the system tray icon to 1-click launch favorite apps directly into standalone virtual display windows without opening the main window.
 * **1-Click Desktop Shortcuts (`.lnk`)**: Automatically converts app logos to `.ico` and creates desktop shortcuts on your Windows desktop.
 
-### 🔄 7. Scrcpy GitHub Auto-Downloader & Updater
-* **GitHub Release Integration**: Automatically checks for official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) 64-bit Windows releases.
-* **One-Click Deploy**: Downloads, extracts, unlocks, and updates the local binary runtime (`scrcpy/`) with a progress bar and changelog viewer.
+### 🔄 7. In-App Release Checker & Auto-Updaters
+* **Scrcpy Studio Self-Updater**: Automatically checks the official Scrcpy Studio GitHub releases in the background, displays header update badges, and provides 1-click self-updating with changelog viewer.
+* **Scrcpy Binary Downloader**: Automatically checks for official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) 64-bit Windows releases and extracts runtime binaries directly to `scrcpy/` with zero manual setup.
 
 ### 🔋 8. Screen Timeout Safety & Flicker-Free Architecture
 * **24-Hour Timeout Boost**: Automatically extends phone screen timeout during mirroring sessions to prevent unwanted sleep.
