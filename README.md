@@ -33,7 +33,7 @@
 ### 🌐 5. Intelligent Network & Device Detection
 * **Real Network Interface Inspection**: Accurately differentiates between **`🌐 LAN`** (Wired Ethernet `eth0`, e.g. Android TV), **`📶 WiFi`** (`wlan0`), and **`🔌 USB`**.
 * **Subnet & mDNS Network Scanner**: High-speed parallel Wi-Fi discovery across 254 subnet IPs in < 1.5 seconds.
-* **Pinned Devices**: Pin frequently used USB/Wi-Fi devices with auto-reconnect on startup.
+* **Persistent Pinned Devices**: Pin frequently used USB/Wi-Fi/LAN devices with configurable auto-reconnect on startup and permanent offline badge memory.
 
 ### 🔔 6. Windows System Tray & Desktop Shortcuts
 * **Taskbar System Tray (`QSystemTrayIcon`)**: Minimizes to tray on close/minimize with background execution.
@@ -44,9 +44,10 @@
 * **GitHub Release Integration**: Automatically checks for official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) 64-bit Windows releases.
 * **One-Click Deploy**: Downloads, extracts, unlocks, and updates the local binary runtime (`scrcpy/`) with a progress bar and changelog viewer.
 
-### 🔋 8. Screen Timeout Reference Counter & Safety
+### 🔋 8. Screen Timeout Safety & Flicker-Free Architecture
 * **24-Hour Timeout Boost**: Automatically extends phone screen timeout during mirroring sessions to prevent unwanted sleep.
 * **Multi-Session Reference Counting**: Tracks all open virtual displays and safely restores your phone's original timeout when the last session closes.
+* **Flicker-Free Windows Subprocess Engine**: Uses `DETACHED_PROCESS` and asynchronous Qt worker threads to eliminate pseudo-console flashes and maintain 60 FPS smooth GUI performance.
 
 ---
 
