@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from core.config_manager import ConfigManager
 from core.system_manager import SystemManager
+from core.app_updater import APP_VERSION
 
 
 class SettingsPanel(QWidget):
@@ -28,6 +29,7 @@ class SettingsPanel(QWidget):
 
     settings_changed = Signal()
     runtime_update_requested = Signal()
+    app_update_requested = Signal()
     refresh_rate_changed = Signal(int)  # ms
 
     def __init__(self, config_manager: ConfigManager, parent=None):
@@ -196,6 +198,28 @@ class SettingsPanel(QWidget):
         lbl_desc.setWordWrap(True)
         lbl_desc.setStyleSheet("color: #94A3B8; font-size: 12px; line-height: 1.4;")
         a_layout.addWidget(lbl_desc)
+
+        # App Version & Update Row
+        row_app_ver = QHBoxLayout()
+        row_app_ver.setSpacing(10)
+        lbl_app_v_title = QLabel("Scrcpy Studio Version:")
+        lbl_app_v_title.setStyleSheet("color: #F1F5F9; font-size: 12px; font-weight: 500;")
+        row_app_ver.addWidget(lbl_app_v_title)
+
+        self.lbl_app_ver_badge = QLabel(APP_VERSION)
+        self.lbl_app_ver_badge.setStyleSheet(
+            "background-color: #1E293B; color: #38BDF8; font-weight: bold; padding: 2px 8px; border-radius: 4px; border: 1px solid #38BDF844; font-family: monospace;"
+        )
+        row_app_ver.addWidget(self.lbl_app_ver_badge)
+
+        row_app_ver.addStretch(1)
+
+        self.btn_check_app_updates = QPushButton("🔄 Check for App Updates")
+        self.btn_check_app_updates.setCursor(Qt.PointingHandCursor)
+        self.btn_check_app_updates.clicked.connect(self.app_update_requested.emit)
+        row_app_ver.addWidget(self.btn_check_app_updates)
+
+        a_layout.addLayout(row_app_ver)
 
         layout.addWidget(grp_about)
 

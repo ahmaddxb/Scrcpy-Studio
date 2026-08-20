@@ -38,6 +38,8 @@ from ui.components.settings_panel import SettingsPanel
 from ui.components.stream_panel import StreamPanel
 from ui.components.wireless_dialog import WirelessDialog
 from ui.components.device_profile_dialog import DeviceProfileDialog
+from ui.components.app_updater_dialog import AppUpdaterDialog
+from core.app_updater import APP_VERSION, AppUpdateChecker
 
 
 class AdbScanWorker(QThread):
@@ -103,6 +105,8 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(500, self._auto_connect_pinned_devices)
         # Check if scrcpy is downloaded on first launch
         QTimer.singleShot(800, self._check_startup_scrcpy_status)
+        # Check for Scrcpy Studio app updates in background
+        QTimer.singleShot(2500, self._check_app_updates_in_background)
 
     def _setup_ui(self):
         central_widget = QWidget(self)
@@ -141,6 +145,17 @@ class MainWindow(QMainWindow):
         self.btn_header_update.clicked.connect(self._open_updater_dialog)
         self.btn_header_update.setVisible(False)
         title_box.addWidget(self.btn_header_update)
+
+        self.btn_app_update = QPushButton(f"🚀 Update Studio")
+        self.btn_app_update.setFixedHeight(22)
+        self.btn_app_update.setCursor(Qt.PointingHandCursor)
+        self.btn_app_update.setStyleSheet(
+            "QPushButton { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284C7, stop:1 #38BDF8); color: #FFFFFF; border: none; border-radius: 4px; font-size: 10px; font-weight: bold; padding: 2px 8px; }"
+            "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0369A1, stop:1 #0284C7); }"
+        )
+        self.btn_app_update.clicked.connect(self._open_app_updater_dialog)
+        self.btn_app_update.setVisible(False)
+        title_box.addWidget(self.btn_app_update)
 
         header_layout.addLayout(title_box)
 
@@ -412,6 +427,7 @@ class MainWindow(QMainWindow):
 
         # Settings panel
         self.settings_panel.runtime_update_requested.connect(self._open_updater_dialog)
+        self.settings_panel.app_update_requested.connect(self._open_app_updater_dialog)
         self.settings_panel.refresh_rate_changed.connect(self._on_refresh_rate_changed)
         self.settings_panel.settings_changed.connect(self._save_settings)
 
@@ -967,6 +983,33 @@ class MainWindow(QMainWindow):
             self._bg_checker = ScrcpyUpdateChecker(current_ver, self)
             self._bg_checker.check_finished.connect(self._on_bg_update_check_finished)
             self._bg_checker.start()
+
+    def _check_app_updates_in_background(self):
+        """Quiet background check for Scrcpy Studio releases on GitHub."""
+        self._bg_app_checker = AppUpdateChecker(APP_VERSION, self)
+        self._bg_app_checker.check_finished.connect(self._on_bg_app_update_checked)
+        self._bg_app_checker.start()
+
+    def _on_bg_app_update_checked(self, has_update: bool, release_info: dict, message: str):
+        """If a newer Scrcpy Studio version is available on GitHub, reveal the app update button."""
+        if has_update and release_info:
+            tag = release_info.get("tag", "")
+            self.btn_app_update.setText(f"🚀 Update Studio: {tag}")
+            self.btn_app_update.setToolTip(f"A newer version of Scrcpy Studio ({tag}) is available on GitHub. Click to update.")
+            self.btn_app_update.setVisible(True)
+            if self.config.get("notifications_enabled", True) and hasattr(self, "tray_icon"):
+                self.tray_icon.showMessage(
+                    "Scrcpy Studio Update Available",
+                    f"Scrcpy Studio {tag} is available on GitHub with new features and improvements!",
+                    QSystemTrayIcon.Information,
+                    5000,
+                )
+        else:
+            self.btn_app_update.setVisible(False)
+
+    def _open_app_updater_dialog(self):
+        dlg = AppUpdaterDialog(self)
+        dlg.exec()
 
     def _on_bg_update_check_finished(self, has_update: bool, release_info: dict, message: str):
         """If a newer Scrcpy version is available on GitHub, reveal the update pill."""
