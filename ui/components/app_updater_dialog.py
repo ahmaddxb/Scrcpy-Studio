@@ -259,12 +259,12 @@ class AppUpdaterDialog(QDialog):
             self.progress_bar.setValue(pct)
         self.lbl_progress_bytes.setText(status_text)
 
-    def _on_installation_completed(self, success: bool, message: str, updater_bat_path: str):
+    def _on_installation_completed(self, success: bool, message: str, updater_script_path: str):
         self.btn_close.setEnabled(True)
         self.btn_check_again.setEnabled(True)
 
-        if success and updater_bat_path:
-            self.updater_bat_path = updater_bat_path
+        if success and updater_script_path:
+            self.updater_script_path = updater_script_path
             self.lbl_progress_status.setText("✅ Update ready! Click Restart to apply.")
             self.btn_action.setEnabled(True)
             self.btn_action.setText("🚀 Restart Scrcpy Studio")
@@ -288,6 +288,6 @@ class AppUpdaterDialog(QDialog):
             QMessageBox.critical(self, "Update Failed", message)
 
     def _apply_and_restart(self):
-        if self.updater_bat_path:
-            apply_update_and_restart(self.updater_bat_path)
+        if hasattr(self, "updater_script_path") and self.updater_script_path:
+            apply_update_and_restart(self.updater_script_path)
             QApplication.quit()

@@ -13,7 +13,7 @@ from typing import Dict, Optional, Tuple
 
 from PySide6.QtCore import QObject, QThread, Signal
 
-APP_VERSION = "v1.0.2"
+APP_VERSION = "v1.0.1"
 GITHUB_STUDIO_API = "https://api.github.com/repos/ahmaddxb/Scrcpy-Studio/releases/latest"
 
 
@@ -31,10 +31,11 @@ def normalize_version(ver_str: str) -> Tuple[int, ...]:
 
 
 def get_current_executable_path() -> Path:
-    """Return the Path to the running executable or main script."""
+    """Return the Path to the running executable or compiled binary."""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve()
-    return (Path(__file__).parent.parent / "app.py").resolve()
+    # In development mode, target the binary in dist/
+    return (Path(__file__).parent.parent / "dist" / "ScrcpyStudio.exe").resolve()
 
 
 class AppUpdateChecker(QThread):
@@ -168,59 +169,72 @@ class AppUpdateInstaller(QThread):
                 self.installation_completed.emit(False, "Could not locate ScrcpyStudio.exe inside update archive.", "")
                 return
 
-            # 3. Create helper batch updater script to safely swap executable upon application exit
+            # 3. Create helper PowerShell updater script to safely swap executable upon application exit
             target_exe = get_current_executable_path()
-            bat_path = temp_dir / "update_and_restart.bat"
+            ps1_path = temp_dir / "update.ps1"
 
-            bat_script = f"""@echo off
-title Updating Scrcpy Studio...
-echo ============================================================
-echo        Updating Scrcpy Studio to the latest version...
-echo ============================================================
-echo Waiting for existing process to exit...
-timeout /t 1 /nobreak >nul
+            ps1_script = f"""$ErrorActionPreference = 'SilentlyContinue'
 
-:RETRY
-taskkill /F /IM ScrcpyStudio.exe >nul 2>&1
-timeout /t 1 /nobreak >nul
+# Purge any inherited PyInstaller bootloader environment tokens
+[Environment]::SetEnvironmentVariable('_MEIPASS2', $null, 'Process')
+[Environment]::SetEnvironmentVariable('_PYI_PARENT_PROCESS_ID', $null, 'Process')
+[Environment]::SetEnvironmentVariable('_PYI_APPLICATION_HOME_DIR', $null, 'Process')
+[Environment]::SetEnvironmentVariable('_PYI_ARCHIVE_FILE', $null, 'Process')
+[Environment]::SetEnvironmentVariable('_PYI_SPLASH_IPC', $null, 'Process')
+Remove-Item Env:_MEIPASS2 -ErrorAction SilentlyContinue
+Remove-Item Env:_PYI_* -ErrorAction SilentlyContinue
 
-copy /y "{str(new_exe_path)}" "{str(target_exe)}" >nul 2>&1
-if errorlevel 1 (
-    echo Retrying file replacement...
-    timeout /t 1 /nobreak >nul
-    goto RETRY
-)
-
-echo Update complete! Restarting Scrcpy Studio...
-start "" "{str(target_exe)}"
-(goto) 2>nul & del "%~f0"
+Start-Sleep -Seconds 1
+for ($i = 0; $i -lt 15; $i++) {{
+    Stop-Process -Name "ScrcpyStudio" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+    try {{
+        Copy-Item -Path '{str(new_exe_path)}' -Destination '{str(target_exe)}' -Force -ErrorAction Stop
+        break
+    }} catch {{
+        Start-Sleep -Seconds 1
+    }}
+}}
+Start-Process -FilePath '{str(target_exe)}' -WorkingDirectory '{str(target_exe.parent)}'
 """
-            with open(bat_path, "w", encoding="utf-8") as f:
-                f.write(bat_script)
+            with open(ps1_path, "w", encoding="utf-8") as f:
+                f.write(ps1_script)
 
-            self.installation_completed.emit(True, "Update ready to install!", str(bat_path))
+            self.installation_completed.emit(True, "Update ready to install!", str(ps1_path))
 
         except Exception as e:
             self.installation_completed.emit(False, f"Update failed: {e}", "")
 
 
-def apply_update_and_restart(updater_bat_path: str):
-    """Launch the update helper script and exit the application."""
-    if not updater_bat_path or not Path(updater_bat_path).exists():
+def apply_update_and_restart(updater_script_path: str):
+    """Launch the update helper script via PowerShell and exit the application."""
+    if not updater_script_path or not Path(updater_script_path).exists():
         return False
     try:
-        creationflags = 0
-        if os.name == "nt":
-            creationflags = subprocess.CREATE_NO_WINDOW | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+        import ctypes
 
-        subprocess.Popen(
-            ["cmd.exe", "/c", str(updater_bat_path)],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=creationflags,
-            close_fds=True,
+        # Clean PyInstaller environment variables in current process before spawning child
+        for k in list(os.environ.keys()):
+            if k.startswith("_PYI") or k == "_MEIPASS2":
+                os.environ.pop(k, None)
+
+        # ShellExecuteW launches PowerShell with -ExecutionPolicy Bypass -WindowStyle Hidden
+        # PowerShell's Start-Process initializes full Windows desktop parent context for PyInstaller bootloader.
+        res = ctypes.windll.shell32.ShellExecuteW(
+            None,
+            "open",
+            "powershell.exe",
+            f'-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{updater_script_path}"',
+            None,
+            0,  # SW_HIDE
         )
-        return True
+        return res > 32
     except Exception:
-        return False
+        try:
+            subprocess.Popen(
+                ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", str(updater_script_path)],
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            return True
+        except Exception:
+            return False

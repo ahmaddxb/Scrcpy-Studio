@@ -1,3 +1,4 @@
+import multiprocessing
 import sys
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from ui.styles import DARK_THEME_QSS
 
 
 def main():
+    multiprocessing.freeze_support()
     # Enable High DPI scaling
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
