@@ -265,52 +265,89 @@ class ConfigManager:
             return {}
         profiles = self.get_device_profiles()
 
-        # 1. Direct hardware serial lookup
-        if hardware_serial and hardware_serial in profiles:
-            return profiles[hardware_serial]
+        # 1. Try to extract hardware serial if not passed
+        hw = hardware_serial
+        if not hw and serial:
+            m = re.match(r"^adb-([a-zA-Z0-9_-]+?)-", serial)
+            if m:
+                hw = m.group(1)
+            if not hw:
+                for p in self.get_pinned_devices():
+                    if p.get("serial") == serial and p.get("hardware_serial"):
+                        hw = p.get("hardware_serial")
+                        break
 
-        # 2. Direct serial lookup (e.g. IP:PORT or USB serial)
+        # 2. Direct hardware serial lookup
+        if hw and hw in profiles:
+            return profiles[hw]
+
+        # 3. Direct serial lookup (e.g. IP:PORT or USB serial)
         if serial and serial in profiles:
             prof = profiles[serial]
-            if hardware_serial and hardware_serial != serial:
-                self.save_device_profile(serial, prof, hardware_serial=hardware_serial)
+            if hw and hw != serial:
+                self.save_device_profile(serial, prof, hardware_serial=hw)
             return prof
 
-        # 3. Match against profile metadata fields
+        # 4. Match against profile metadata fields or base IP
         for k, p in profiles.items():
             if not isinstance(p, dict):
                 continue
-            if hardware_serial and p.get("hardware_serial") == hardware_serial:
+            if hw and p.get("hardware_serial") == hw:
                 return p
             if serial and p.get("serial") == serial:
                 return p
             if serial and ":" in serial and ":" in k:
                 if serial.split(":")[0] == k.split(":")[0]:
-                    if hardware_serial:
-                        self.save_device_profile(serial, p, hardware_serial=hardware_serial)
+                    if hw:
+                        self.save_device_profile(serial, p, hardware_serial=hw)
                     return p
+            if hw and k.startswith("adb-") and hw in k:
+                return p
 
         return {}
 
     def save_device_profile(self, serial: str, profile_data: Dict[str, Any], hardware_serial: str = "") -> None:
-        """Save or update profile dictionary for a device, keyed preferentially by permanent hardware serial."""
+        """Save or update profile dictionary for a device, strictly keyed by permanent hardware serial."""
         if not serial and not hardware_serial:
             return
         if "device_profiles" not in self.data:
             self.data["device_profiles"] = {}
 
+        # 1. Resolve hardware serial if not explicitly passed
         hw = hardware_serial or profile_data.get("hardware_serial", "")
+        if not hw and serial:
+            m = re.match(r"^adb-([a-zA-Z0-9_-]+?)-", serial)
+            if m:
+                hw = m.group(1)
+            if not hw:
+                for p in self.get_pinned_devices():
+                    if p.get("serial") == serial and p.get("hardware_serial"):
+                        hw = p.get("hardware_serial")
+                        break
+            if not hw:
+                for k, p in self.data["device_profiles"].items():
+                    if p.get("hardware_serial") and (p.get("last_seen_serial") == serial or k == serial):
+                        hw = p.get("hardware_serial")
+                        break
+
         key = hw if (hw and hw.lower() != "unknown") else serial
         if hw:
             profile_data["hardware_serial"] = hw
         if serial:
             profile_data["last_seen_serial"] = serial
 
+        # Save to canonical key
         self.data["device_profiles"][key] = profile_data
 
-        # If migrating from old IP:port key to hardware serial, delete stale IP key
-        if key != serial and serial in self.data["device_profiles"]:
-            del self.data["device_profiles"][serial]
+        # Clean up any stale duplicate keys for the same device
+        for k in list(self.data["device_profiles"].keys()):
+            if k != key:
+                if k == serial:
+                    del self.data["device_profiles"][k]
+                elif ":" in k and ":" in serial and k.split(":")[0] == serial.split(":")[0]:
+                    del self.data["device_profiles"][k]
+                elif k.startswith("adb-") and hw and hw in k:
+                    del self.data["device_profiles"][k]
 
         self.save()
 

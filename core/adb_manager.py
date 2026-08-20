@@ -107,9 +107,9 @@ class AdbManager:
             serial = parts[0]
             state = parts[1]
 
-            # Detect wireless (IP:PORT format)
-            is_wireless = bool(re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$", serial))
-            ip_port = serial if is_wireless else ""
+            # Detect network endpoint (IP:PORT format or mDNS TLS format)
+            is_net = bool(re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$", serial)) or ("._tcp" in serial) or ("_adb-tls" in serial) or ("_adb._tcp" in serial)
+            ip_port = serial if is_net else ""
 
             # Parse key-value metadata (e.g. model:Pixel_8 transport_id:1)
             meta: Dict[str, str] = {}
@@ -130,13 +130,14 @@ class AdbManager:
                 product=product,
                 device=device_name,
                 transport_id=transport_id,
-                is_wireless=is_wireless,
+                is_wireless=is_net,
                 ip_port=ip_port
             )
 
             # Query battery, hardware serial, and screen timeout if device is authorized
             if state == "device":
                 dev.connection_type = self.get_network_interface_type(serial)
+                dev.is_wireless = (dev.connection_type == "wifi")
                 dev.hardware_serial = self.get_hardware_serial(serial)
                 bat, charging = self.get_battery_info(serial)
                 dev.battery_level = bat
@@ -153,8 +154,9 @@ class AdbManager:
         m = re.match(r"^adb-([a-zA-Z0-9_-]+?)-", serial)
         if m:
             return m.group(1)
-        # If serial is already a direct hardware serial (not an IP:port)
-        if not bool(re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$", serial)):
+        # If serial is already a direct hardware serial (not an IP:port or mDNS)
+        is_net = bool(re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$", serial)) or ("._tcp" in serial) or ("_adb-tls" in serial) or ("_adb._tcp" in serial)
+        if not is_net:
             return serial
         code, out, _ = self._run_cmd(["-s", serial, "shell", "getprop", "ro.serialno"], timeout=2)
         if code == 0 and out.strip() and out.strip().lower() != "unknown":
@@ -166,7 +168,8 @@ class AdbManager:
 
     def get_network_interface_type(self, serial: str) -> str:
         """Detect whether connected via 'ethernet', 'wifi', or 'usb'."""
-        if not bool(re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$", serial)):
+        is_net = bool(re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$", serial)) or ("._tcp" in serial) or ("_adb-tls" in serial) or ("_adb._tcp" in serial)
+        if not is_net:
             return "usb"
         code, out, _ = self._run_cmd(["-s", serial, "shell", "ip", "route"], timeout=2)
         if code == 0:
