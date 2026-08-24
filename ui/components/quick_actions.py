@@ -123,7 +123,9 @@ class QuickActionBar(QFrame):
         self.btn_unlock = self._create_btn("🔓 Unlock", self._unlock_device)
         self.btn_wake = self._create_btn("⚡ Wake Up", self._wake_up_device)
         self.btn_screen_on = self._create_btn("💡 Screen On", self._turn_screen_on)
+        self.btn_screen_on.setToolTip("Scrcpy: Turn physical device display ON (Alt+Shift+O)")
         self.btn_screen_off = self._create_btn("🌑 Screen Off", self._turn_screen_off)
+        self.btn_screen_off.setToolTip("Scrcpy: Turn physical device display OFF while keeping mirroring active (Alt+O)")
 
         grid.addWidget(self.btn_unlock, 0, 0)
         grid.addWidget(self.btn_wake, 0, 1)
@@ -181,9 +183,11 @@ class QuickActionBar(QFrame):
         scrcpy_ok = False
         if self.process_manager:
             scrcpy_ok = self.process_manager.send_scrcpy_shortcut(self.selected_serial, "screen_on")
-        self.adb.wake_up(self.selected_serial)
-        mode = "Scrcpy Live Display Mode" if scrcpy_ok else "ADB Keyevent"
-        self.action_triggered.emit("Screen On", f"Turned on physical display for {self.selected_serial} via {mode}")
+        
+        if scrcpy_ok:
+            self.action_triggered.emit("Screen On", f"Sent Scrcpy Screen On command (Alt+Shift+O) to {self.selected_serial}")
+        else:
+            self.action_triggered.emit("Screen On", f"No active Scrcpy session found for {self.selected_serial}. Start mirroring to control screen state via Scrcpy.")
 
     def _turn_screen_off(self):
         if not self.selected_serial:
@@ -191,10 +195,11 @@ class QuickActionBar(QFrame):
         scrcpy_ok = False
         if self.process_manager:
             scrcpy_ok = self.process_manager.send_scrcpy_shortcut(self.selected_serial, "screen_off")
-        if not scrcpy_ok:
-            self.adb.turn_off_screen(self.selected_serial)
-        mode = "Scrcpy Live Display Mode (keeps mirroring active)" if scrcpy_ok else "ADB Keyevent (Sleep)"
-        self.action_triggered.emit("Screen Off", f"Turned off physical display for {self.selected_serial} via {mode}")
+        
+        if scrcpy_ok:
+            self.action_triggered.emit("Screen Off", f"Sent Scrcpy Screen Off command (Alt+O) to {self.selected_serial}")
+        else:
+            self.action_triggered.emit("Screen Off", f"No active Scrcpy session found for {self.selected_serial}. Start mirroring to control screen state via Scrcpy.")
 
     def _unlock_device(self):
         if not self.selected_serial:

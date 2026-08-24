@@ -345,12 +345,32 @@ class ProcessManager(QObject):
         try:
             import ctypes
             from ctypes import wintypes
+            import time
             user32 = ctypes.windll.user32
+
+            # Gather target PIDs for this device serial / session
+            target_pids = set()
+            for k, sess in self.sessions.items():
+                dev = getattr(sess, "device_serial", "") or k.split("::")[0]
+                if dev == serial or not serial:
+                    if sess.process and sess.process.state() == QProcess.ProcessState.Running:
+                        pid = sess.process.processId()
+                        if pid:
+                            target_pids.add(pid)
 
             matching_hwnds = []
 
             def enum_cb(hwnd, lparam):
                 if user32.IsWindowVisible(hwnd):
+                    # Check by process ID first
+                    if target_pids:
+                        win_pid = wintypes.DWORD()
+                        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(win_pid))
+                        if win_pid.value in target_pids:
+                            matching_hwnds.append(hwnd)
+                            return True
+
+                    # Fallback check by title
                     length = user32.GetWindowTextLengthW(hwnd)
                     if length > 0:
                         buff = ctypes.create_unicode_buffer(length + 1)
@@ -370,21 +390,28 @@ class ProcessManager(QObject):
                 KEYEVENTF_KEYUP = 0x0002
 
                 for hwnd in matching_hwnds:
+                    # Ensure Scrcpy window is restored & brought to foreground
+                    user32.ShowWindow(hwnd, 9)  # SW_RESTORE
                     user32.SetForegroundWindow(hwnd)
+                    time.sleep(0.04)
+
                     if action == "screen_on":
-                        # Alt + Shift + O
+                        # Alt + Shift + O (Scrcpy Screen On / POWER_MODE_NORMAL)
                         user32.keybd_event(VK_MENU, 0, 0, 0)
                         user32.keybd_event(VK_SHIFT, 0, 0, 0)
                         user32.keybd_event(VK_O, 0, 0, 0)
+                        time.sleep(0.02)
                         user32.keybd_event(VK_O, 0, KEYEVENTF_KEYUP, 0)
                         user32.keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0)
                         user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
                     else:
-                        # Alt + O (Screen Off)
+                        # Alt + O (Scrcpy Screen Off / POWER_MODE_OFF)
                         user32.keybd_event(VK_MENU, 0, 0, 0)
                         user32.keybd_event(VK_O, 0, 0, 0)
+                        time.sleep(0.02)
                         user32.keybd_event(VK_O, 0, KEYEVENTF_KEYUP, 0)
                         user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+                    time.sleep(0.02)
                 return True
         except Exception:
             pass
