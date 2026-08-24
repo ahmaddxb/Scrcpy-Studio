@@ -31,9 +31,11 @@ def main():
     app.setStyleSheet(DARK_THEME_QSS)
 
     # Load App Icon if exists
-    icon_path = get_bundle_dir() / "ui" / "assets" / "icon.png"
+    icon_path = get_bundle_dir() / "ui" / "assets" / "icon.ico"
     if not icon_path.exists():
-        icon_path = get_project_root() / "scrcpy" / "scrcpy.png"
+        icon_path = get_bundle_dir() / "ui" / "assets" / "icon.png"
+    if not icon_path.exists():
+        icon_path = get_project_root() / "assets" / "icons" / "app_icon_option_2_minimal_emblem.png"
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
 

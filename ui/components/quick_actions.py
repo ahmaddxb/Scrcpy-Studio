@@ -3,7 +3,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QByteArray, QSize, Qt, Signal
+from PySide6.QtGui import QIcon, QPainter, QPixmap
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -18,6 +20,26 @@ from PySide6.QtWidgets import (
 
 from core.adb_manager import AdbManager
 from core.config_manager import ConfigManager
+
+# Vector SVG Nav Icons from Iconify (lsicon/menu-endways-filled, akar-icons/square, akar-icons/chevron-left)
+SVG_NAV_ICONS = {
+    "recents": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="{color}" fill-rule="evenodd" d="M3 14V2h1v12zm3 0V2h1v12zm3 0V2h1v12zm3 0V2h1v12z" clip-rule="evenodd"/></svg>""",
+    "home": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" fill="none" stroke="{color}" stroke-width="2.2" rx="3"/></svg>""",
+    "back": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="{color}" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="m15 4l-8 8l8 8"/></svg>""",
+}
+
+
+def create_svg_icon(svg_template: str, color: str = "#CBD5E1", size: int = 14) -> QIcon:
+    """Render crisp High-DPI QIcon from SVG path template."""
+    svg_data = svg_template.replace("{color}", color).encode("utf-8")
+    renderer = QSvgRenderer(QByteArray(svg_data))
+    pixmap = QPixmap(size * 2, size * 2)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    renderer.render(painter)
+    painter.end()
+    pixmap.setDevicePixelRatio(2.0)
+    return QIcon(pixmap)
 
 
 class QuickActionBar(QFrame):
@@ -122,9 +144,9 @@ class QuickActionBar(QFrame):
         # Row 0: Screen & Power State (Unlock, Wake Up, Screen On, Screen Off)
         self.btn_unlock = self._create_btn("🔓 Unlock", self._unlock_device)
         self.btn_wake = self._create_btn("⚡ Wake Up", self._wake_up_device)
-        self.btn_screen_on = self._create_btn("💡 Screen On", self._turn_screen_on)
+        self.btn_screen_on = self._create_btn("📱 Screen On", self._turn_screen_on)
         self.btn_screen_on.setToolTip("Scrcpy: Turn physical device display ON (Alt+Shift+O)")
-        self.btn_screen_off = self._create_btn("🌑 Screen Off", self._turn_screen_off)
+        self.btn_screen_off = self._create_btn("💤 Screen Off", self._turn_screen_off)
         self.btn_screen_off.setToolTip("Scrcpy: Turn physical device display OFF while keeping mirroring active (Alt+O)")
 
         grid.addWidget(self.btn_unlock, 0, 0)
@@ -132,15 +154,15 @@ class QuickActionBar(QFrame):
         grid.addWidget(self.btn_screen_on, 0, 2)
         grid.addWidget(self.btn_screen_off, 0, 3)
 
-        # Row 1: Navigation Keys
-        self.btn_back = self._create_btn("◀ Back", lambda: self._send_key(4, "Back"))
-        self.btn_home = self._create_btn("🏠 Home", lambda: self._send_key(3, "Home"))
-        self.btn_app_switch = self._create_btn("🔲 Recents", lambda: self._send_key(187, "App Switch"))
+        # Row 1: Navigation Keys (Vector SVG Icons)
+        self.btn_app_switch = self._create_btn(" Recents", lambda: self._send_key(187, "App Switch"), icon=create_svg_icon(SVG_NAV_ICONS["recents"], size=13))
+        self.btn_home = self._create_btn(" Home", lambda: self._send_key(3, "Home"), icon=create_svg_icon(SVG_NAV_ICONS["home"], size=13))
+        self.btn_back = self._create_btn(" Back", lambda: self._send_key(4, "Back"), icon=create_svg_icon(SVG_NAV_ICONS["back"], size=13))
         self.btn_notif = self._create_btn("🔔 Notifs", lambda: self._send_key(83, "Notifications"))
 
-        grid.addWidget(self.btn_back, 1, 0)
+        grid.addWidget(self.btn_app_switch, 1, 0)
         grid.addWidget(self.btn_home, 1, 1)
-        grid.addWidget(self.btn_app_switch, 1, 2)
+        grid.addWidget(self.btn_back, 1, 2)
         grid.addWidget(self.btn_notif, 1, 3)
 
         # Row 2: Hardware & Utilities (Power, Screenshot, Vol +, Vol -)
@@ -208,10 +230,13 @@ class QuickActionBar(QFrame):
         if ok:
             self.action_triggered.emit("Unlock", f"Sent wake & unlock swipe to {self.selected_serial}")
 
-    def _create_btn(self, text: str, callback) -> QPushButton:
+    def _create_btn(self, text: str, callback, icon: Optional[QIcon] = None) -> QPushButton:
         btn = QPushButton(text)
         btn.setProperty("class", "quickAction")
         btn.setCursor(Qt.PointingHandCursor)
+        if icon and not icon.isNull():
+            btn.setIcon(icon)
+            btn.setIconSize(QSize(14, 14))
         btn.clicked.connect(callback)
         return btn
 

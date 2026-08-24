@@ -37,6 +37,7 @@ from ui.components.quick_actions import QuickActionBar
 from ui.components.settings_panel import SettingsPanel
 from ui.components.stream_panel import StreamPanel
 from ui.components.wireless_dialog import WirelessDialog
+from ui.components.companion_bar import CompanionToolBar
 from ui.components.device_profile_dialog import DeviceProfileDialog
 from ui.components.app_updater_dialog import AppUpdaterDialog
 from core.app_updater import APP_VERSION, AppUpdateChecker
@@ -88,6 +89,7 @@ class MainWindow(QMainWindow):
         self.devices: Dict[str, AdbDevice] = {}
         self.selected_serial: Optional[str] = None
         self.card_widgets: Dict[str, DeviceCard] = {}
+        self.companion_bars: Dict[str, CompanionToolBar] = {}
         self.pending_app_transfers: Dict[str, Tuple[str, str, str]] = {}
 
         self.setWindowTitle("Scrcpy Studio — Android Control & Mirroring")
@@ -1068,12 +1070,47 @@ class MainWindow(QMainWindow):
         self.process_manager.stop_session(serial)
 
     def _on_session_started(self, serial: str):
+        real_serial = serial.split("::")[0]
+        if real_serial in self.card_widgets:
+            self.card_widgets[real_serial].set_running(True)
         if serial in self.card_widgets:
             self.card_widgets[serial].set_running(True)
 
+        # Spawn magnetic companion toolbar if enabled
+        if self.config.get("enable_companion_toolbar", True):
+            if serial not in self.companion_bars:
+                try:
+                    bar = CompanionToolBar(
+                        session_key=serial,
+                        process_manager=self.process_manager,
+                        adb=self.adb,
+                        config=self.config,
+                        on_pull_app=self._on_pull_active_phone_app,
+                        parent=None,
+                    )
+                    bar.action_triggered.connect(
+                        lambda act, msg: self._append_log(f"Toolbar:{act}", msg)
+                    )
+                    self.companion_bars[serial] = bar
+                    bar.show()
+                except Exception as e:
+                    self._append_log("Toolbar", f"Failed to initialize companion bar: {e}")
+
     def _on_session_stopped(self, serial: str, exit_code: int):
+        real_serial = serial.split("::")[0]
+        if real_serial in self.card_widgets:
+            self.card_widgets[real_serial].set_running(False)
         if serial in self.card_widgets:
             self.card_widgets[serial].set_running(False)
+
+        # Close and cleanup companion bar
+        if serial in self.companion_bars:
+            bar = self.companion_bars.pop(serial)
+            try:
+                bar.close()
+                bar.deleteLater()
+            except Exception:
+                pass
 
     def _save_settings(self):
         current = self.stream_panel.get_settings()

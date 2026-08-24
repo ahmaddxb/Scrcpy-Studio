@@ -77,6 +77,13 @@ class SettingsPanel(QWidget):
         self.chk_close_to_tray.toggled.connect(self._on_setting_changed)
         w_layout.addWidget(self.chk_close_to_tray)
 
+        # Magnetic Companion Toolbar
+        self.chk_companion_toolbar = QCheckBox("🧰 Enable Magnetic Companion Toolbar by default (QtScrcpy style)")
+        self.chk_companion_toolbar.setStyleSheet("font-size: 13px; font-weight: 500; color: #F1F5F9;")
+        self.chk_companion_toolbar.setToolTip("Attach a floating quick-actions toolbar directly to the right edge of any active Scrcpy mirror or app window.")
+        self.chk_companion_toolbar.toggled.connect(self._on_setting_changed)
+        w_layout.addWidget(self.chk_companion_toolbar)
+
         # Notifications
         self.chk_notifications = QCheckBox("🔔 Display Windows notifications on device connect / disconnect")
         self.chk_notifications.setStyleSheet("font-size: 13px; font-weight: 500; color: #F1F5F9;")
@@ -238,6 +245,7 @@ class SettingsPanel(QWidget):
             self.chk_start_minimized.setEnabled(is_boot)
             self.chk_start_minimized.setChecked(self.config.get("start_minimized", False))
             self.chk_close_to_tray.setChecked(self.config.get("close_to_tray", True))
+            self.chk_companion_toolbar.setChecked(self.config.get("enable_companion_toolbar", True))
             self.chk_notifications.setChecked(self.config.get("notifications_enabled", True))
 
             # 2. Devices & Automation
@@ -292,6 +300,7 @@ class SettingsPanel(QWidget):
             return
         self.config.set("start_minimized", self.chk_start_minimized.isChecked())
         self.config.set("close_to_tray", self.chk_close_to_tray.isChecked())
+        self.config.set("enable_companion_toolbar", self.chk_companion_toolbar.isChecked())
         self.config.set("notifications_enabled", self.chk_notifications.isChecked())
         self.config.set("auto_reconnect_pinned", self.chk_auto_reconnect.isChecked())
         self.config.set("smart_screen_awake", self.chk_screen_awake_safety.isChecked())

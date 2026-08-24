@@ -261,6 +261,12 @@ class StreamPanel(QWidget):
         self.chk_borderless.toggled.connect(self._on_setting_changed)
         wb_layout.addWidget(self.chk_borderless, 1, 0)
 
+        self.chk_companion_toolbar = QCheckBox("🧰 Magnetic Side Toolbar")
+        self.chk_companion_toolbar.setToolTip("Attach a floating quick-actions toolbar directly to the right edge of the mirror window (QtScrcpy style)")
+        self.chk_companion_toolbar.setChecked(True)
+        self.chk_companion_toolbar.toggled.connect(self._on_setting_changed)
+        wb_layout.addWidget(self.chk_companion_toolbar, 1, 1)
+
         w_layout.addWidget(win_behavior_box)
         w_layout.addStretch(1)
         self.tabs.addTab(tab_win, "🪟 Window")
@@ -492,6 +498,7 @@ class StreamPanel(QWidget):
             "always_on_top": self.chk_always_top.isChecked(),
             "fullscreen": self.chk_fullscreen.isChecked(),
             "borderless": self.chk_borderless.isChecked(),
+            "enable_companion_toolbar": self.chk_companion_toolbar.isChecked(),
             "show_touches": self.chk_show_touches.isChecked(),
             "sync_clipboard": self.chk_clipboard.isChecked(),
             "window_width": self.edit_win_width.text().strip(),
@@ -596,6 +603,7 @@ class StreamPanel(QWidget):
             self.chk_always_top.setChecked(s.get("always_on_top", False))
             self.chk_fullscreen.setChecked(s.get("fullscreen", False))
             self.chk_borderless.setChecked(s.get("borderless", False))
+            self.chk_companion_toolbar.setChecked(s.get("enable_companion_toolbar", self.config.get("enable_companion_toolbar", True)))
             self.chk_show_touches.setChecked(s.get("show_touches", False))
             self.chk_clipboard.setChecked(s.get("sync_clipboard", True))
             self.chk_record.setChecked(s.get("record", False))
