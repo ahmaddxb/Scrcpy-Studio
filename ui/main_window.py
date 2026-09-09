@@ -575,6 +575,13 @@ class MainWindow(QMainWindow):
         pkg = self.adb.get_current_focused_package(serial)
         if not pkg or "launcher" in pkg.lower() or "systemui" in pkg.lower():
             self._append_log("AppTransfer", "[Notice] No active foreground app found open on phone screen.")
+            if not self.isVisible() and hasattr(self, "tray_icon") and self.tray_icon.isVisible():
+                self.tray_icon.showMessage(
+                    "Move to PC",
+                    "No active foreground app open on phone screen.",
+                    QSystemTrayIcon.MessageIcon.Warning,
+                    3000,
+                )
             return
 
         # Check if we have a friendly name or custom resolution preset in favorites
@@ -587,6 +594,13 @@ class MainWindow(QMainWindow):
             preset_res = fav.get("display_res", "")
 
         self._append_log("AppTransfer", f"Detected active app '{name}' ({pkg}) on phone. Transferring to PC...")
+        if not self.isVisible() and hasattr(self, "tray_icon") and self.tray_icon.isVisible():
+            self.tray_icon.showMessage(
+                "Move to PC",
+                f"Transferring '{name}' to PC Virtual Display...",
+                QSystemTrayIcon.MessageIcon.Information,
+                2500,
+            )
         self._on_move_favorite_app_to_display(serial, pkg, name, preset_res)
 
     def _on_app_display_launch(self, serial: str, settings: Dict, package: str, title: str):
@@ -1145,6 +1159,7 @@ class MainWindow(QMainWindow):
         self.tray_icon.setToolTip("Scrcpy Studio — Android Control & Mirroring")
 
         self.tray_menu = QMenu()
+        self.tray_menu.aboutToShow.connect(self._update_tray_menu)
         self.tray_icon.setContextMenu(self.tray_menu)
         self.tray_icon.activated.connect(self._on_tray_activated)
         self._update_tray_menu()
@@ -1157,9 +1172,21 @@ class MainWindow(QMainWindow):
 
         self.tray_menu.clear()
 
-        # Title / Device Header
-        if self.selected_serial:
-            dev_name = self.devices[self.selected_serial].display_name if self.selected_serial in self.devices else self.selected_serial
+        # Determine target device (selected or first online connected device)
+        online_serials = [
+            s for s, d in self.devices.items()
+            if getattr(d, "status", "") == "device"
+        ]
+        target_serial = (
+            self.selected_serial
+            if (self.selected_serial and self.selected_serial in self.devices and getattr(self.devices[self.selected_serial], "status", "") == "device")
+            else (online_serials[0] if online_serials else None)
+        )
+
+        # Title / Device Header & Actions
+        if target_serial:
+            dev = self.devices.get(target_serial)
+            dev_name = self.config.get_device_alias(target_serial, dev.display_name if dev else target_serial)
             header_act = self.tray_menu.addAction(f"📱 Connected: {dev_name}")
             header_act.setEnabled(False)
             font = header_act.font()
@@ -1167,7 +1194,21 @@ class MainWindow(QMainWindow):
             header_act.setFont(font)
 
             act_mirror = self.tray_menu.addAction("🚀 Mirror Phone Screen")
-            act_mirror.triggered.connect(lambda: self._launch_device(self.selected_serial))
+            act_mirror.triggered.connect(lambda _, s=target_serial: self._launch_device(s))
+
+            act_pull = self.tray_menu.addAction("🔀 Move to PC (Active App)")
+            act_pull.setToolTip("Detect active app open on phone screen and transfer to PC Virtual Display")
+            act_pull.triggered.connect(lambda _, s=target_serial: self._on_pull_active_phone_app(s))
+
+            # Multi-device switcher if multiple devices are online
+            if len(online_serials) > 1:
+                dev_menu = self.tray_menu.addMenu("🔄 Switch Active Device")
+                for s in online_serials:
+                    d = self.devices.get(s)
+                    d_alias = self.config.get_device_alias(s, d.display_name if d else s)
+                    prefix = "✓ " if s == target_serial else "   "
+                    dev_act = dev_menu.addAction(f"{prefix}{d_alias}")
+                    dev_act.triggered.connect(lambda _, sel=s: self._on_device_selected(sel))
         else:
             header_act = self.tray_menu.addAction("📱 No Device Connected")
             header_act.setEnabled(False)
@@ -1182,13 +1223,13 @@ class MainWindow(QMainWindow):
                 pkg = fav.get("package", "")
                 name = fav.get("name", pkg)
                 res = fav.get("display_res", "")
-                app_icon = self.icon_manager.get_icon(pkg, self.selected_serial)
+                app_icon = self.icon_manager.get_icon(pkg, target_serial) if target_serial else None
                 if app_icon:
                     act_fav = menu_favs.addAction(app_icon, name)
                 else:
                     act_fav = menu_favs.addAction(f"{fav.get('icon', '📱')} {name}")
                 act_fav.triggered.connect(
-                    lambda _, p=pkg, n=name, r=res: self._on_favorite_app_launch(self.selected_serial or "", p, n, r)
+                    lambda _, p=pkg, n=name, r=res, s=target_serial: self._on_favorite_app_launch(s or "", p, n, r)
                 )
 
         self.tray_menu.addSeparator()

@@ -21,31 +21,38 @@
 * **Dedicated Standalone Windows**: Launch any installed Android app in an independent virtual display window (`--new-display=...`) with custom PC window dimensions (`--window-width`, `--window-height`) without interrupting the physical phone screen.
 * **Resolution & DPI Presets**: Pre-configured and customizable display profiles (`1080x2316/420`, `1080x1920`, `1920x1080 DeX`, etc.).
 
-### ⭐ 3. Favorite Apps Dock & Live Icon Extraction
+### 🧲 3. Magnetic Companion Toolbar (QtScrcpy Style)
+* **Floating Window Attachment**: Frameless companion toolbar that magnetically tracks and attaches flush to the outer edge of any active Scrcpy mirror or Virtual Display window.
+* **Natural Win32 Z-Order**: Bound via `GWLP_HWNDPARENT` so the toolbar naturally matches Scrcpy's exact Z-order and never hovers over other desktop applications.
+* **High-DPI Vector Navigation Icons**: Crisp SVG icons for **Recents** (`lsicon:menu-endways-filled`), **Home** (`akar-icons:square`), and **Back** (`akar-icons:chevron-left`).
+* **Smooth Fade-In Tooltips**: 1.0s hover delay with smooth cubic opacity fade-in transition next to each button.
+* **1-Click Controls**: Screen on/off, unlock, wake, power, screenshots, volume, app pull, and collapsible handle.
+
+### ⭐ 4. Favorite Apps Dock & Live Icon Extraction
 * **Authentic App Logos**: Dual-engine extractor pulls launcher icons directly from device APKs via ADB (`exec-out unzip`) with HD Google Play Store metadata fallback.
 * **Batch ADB Scraper**: Multi-threaded parallel icon scraper extracts all installed app icons in seconds without installing any helper APKs on the phone.
 * **Provenances & Tooltips**: Inspect exact icon origins (`📱 Device APK` vs `🌐 Online HD`) and force re-extraction anytime.
 
-### 💡 4. Native Scrcpy Screen Power Controls
+### 💡 5. Native Scrcpy Screen Power Controls
 * **Live Display Mode Control**: Turn off your phone's physical display via native Scrcpy live shortcuts (<kbd>Alt</kbd> + <kbd>O</kbd> / `POWER_MODE_OFF`) so nobody can see your phone screen while you continue mirroring and multitasking from PC.
 * **Wake On Demand**: Instantly restore the physical screen (<kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>O</kbd>) directly from the Quick Actions dock.
 
-### 🌐 5. Intelligent Network & Device Detection
+### 🌐 6. Intelligent Network & Device Detection
 * **Real Network Interface Inspection**: Accurately differentiates between **`🌐 LAN`** (Wired Ethernet `eth0`, e.g. Android TV), **`📶 WiFi`** (`wlan0`), and **`🔌 USB`**, including Android 11+ mDNS TLS wireless debugging.
 * **Hardware Serial Profile Persistence**: All custom settings, presets, and friendly aliases are strictly tied to permanent hardware serials (`ro.serialno`), preventing lost configurations across IP/port changes.
 * **Subnet & mDNS Network Scanner**: High-speed parallel Wi-Fi discovery across 254 subnet IPs in < 1.5 seconds.
 * **Persistent Pinned Devices**: Pin frequently used USB/Wi-Fi/LAN devices with configurable auto-reconnect on startup and permanent offline badge memory.
 
-### 🔔 6. Windows System Tray & Desktop Shortcuts
+### 🔔 7. Windows System Tray & Desktop Shortcuts
 * **Taskbar System Tray (`QSystemTrayIcon`)**: Minimizes to tray on close/minimize with background execution.
 * **Tray Quick-Launch**: Right-click the system tray icon to 1-click launch favorite apps directly into standalone virtual display windows without opening the main window.
 * **1-Click Desktop Shortcuts (`.lnk`)**: Automatically converts app logos to `.ico` and creates desktop shortcuts on your Windows desktop.
 
-### 🔄 7. In-App Release Checker & Auto-Updaters
+### 🔄 8. In-App Release Checker & Auto-Updaters
 * **Scrcpy Studio Self-Updater**: Automatically checks the official Scrcpy Studio GitHub releases in the background, displays header update badges, and provides 1-click self-updating with changelog viewer.
 * **Scrcpy Binary Downloader**: Automatically checks for official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) 64-bit Windows releases and extracts runtime binaries directly to `scrcpy/` with zero manual setup.
 
-### 🔋 8. Screen Timeout Safety & Flicker-Free Architecture
+### 🔋 9. Screen Timeout Safety & Flicker-Free Architecture
 * **24-Hour Timeout Boost**: Automatically extends phone screen timeout during mirroring sessions to prevent unwanted sleep.
 * **Multi-Session Reference Counting**: Tracks all open virtual displays and safely restores your phone's original timeout when the last session closes.
 * **Flicker-Free Windows Subprocess Engine**: Uses `DETACHED_PROCESS` and asynchronous Qt worker threads to eliminate pseudo-console flashes and maintain 60 FPS smooth GUI performance.
