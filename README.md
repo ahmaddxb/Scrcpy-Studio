@@ -45,14 +45,24 @@
 
 ### 🔔 7. Windows System Tray & Desktop Shortcuts
 * **Taskbar System Tray (`QSystemTrayIcon`)**: Minimizes to tray on close/minimize with background execution.
+* **Simplified Tray Header & Quick Migration**: Displays clean device status (e.g. `📱 Samsung S25 Ultra`) with instant 1-click **`🔀 Move to PC (Active App)`** and screen mirroring.
 * **Tray Quick-Launch**: Right-click the system tray icon to 1-click launch favorite apps directly into standalone virtual display windows without opening the main window.
 * **1-Click Desktop Shortcuts (`.lnk`)**: Automatically converts app logos to `.ico` and creates desktop shortcuts on your Windows desktop.
+* **Silent Background Startup**: Configurable `Start minimized to System Tray` preference in Settings.
 
-### 🔄 8. In-App Release Checker & Auto-Updaters
+### ⌨️ 8. System-Wide Global Hotkeys & In-App Shortcuts
+* **Win32 Background Hotkeys**: Control your phone from anywhere with global shortcuts that work even when Scrcpy Studio is minimized to the system tray or gaming in another application:
+  * <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>M</kbd>: **🚀 Mirror Phone Screen**
+  * <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>: **🔀 Move to PC (Active App)**
+  * <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd>: **🪟 Show / Focus Scrcpy Studio**
+* **Custom Keybinding Hub**: Record custom key combinations in **Settings** via interactive `QKeySequenceEdit` with real-time Win32 conflict detection and live tray menu hints.
+
+### 🔄 9. Dual Version Badges & Auto-Updaters
+* **Distinct Header Version Badges**: Clearly distinguishes between the **Scrcpy Studio Version** (`v1.0.6`) and the **Bundled Scrcpy Engine Version** (`Scrcpy v4.1`).
 * **Scrcpy Studio Self-Updater**: Automatically checks the official Scrcpy Studio GitHub releases in the background, displays header update badges, and provides 1-click self-updating with changelog viewer.
 * **Scrcpy Binary Downloader**: Automatically checks for official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) 64-bit Windows releases and extracts runtime binaries directly to `scrcpy/` with zero manual setup.
 
-### 🔋 9. Screen Timeout Safety & Flicker-Free Architecture
+### 🔋 10. Screen Timeout Safety & Flicker-Free Architecture
 * **24-Hour Timeout Boost**: Automatically extends phone screen timeout during mirroring sessions to prevent unwanted sleep.
 * **Multi-Session Reference Counting**: Tracks all open virtual displays and safely restores your phone's original timeout when the last session closes.
 * **Flicker-Free Windows Subprocess Engine**: Uses `DETACHED_PROCESS` and asynchronous Qt worker threads to eliminate pseudo-console flashes and maintain 60 FPS smooth GUI performance.
@@ -113,18 +123,24 @@ z:/Github/Scrcpy-UI/
 │   ├── config_manager.py       # Thread-safe JSON configuration manager
 │   ├── process_manager.py      # Scrcpy supervisor & screen timeout ref-counter
 │   ├── icon_manager.py         # Dual-engine on-device & web icon scraper
+│   ├── hotkey_manager.py       # Win32 RegisterHotKey & native event filter
 │   ├── scrcpy_updater.py       # GitHub release checker & binary downloader
+│   ├── app_updater.py          # Scrcpy Studio in-app self-updater engine
 │   └── shortcut_manager.py     # Windows .lnk shortcut generator with ICO converter
 │
 └── ui/                         # Presentation layer (PySide6 Qt6 widgets)
     ├── main_window.py          # Main dashboard, top header & system tray
     └── components/
+        ├── companion_bar.py    # Magnetic floating companion toolbar (QtScrcpy style)
         ├── device_card.py      # Device tile (battery %, model, state badges)
         ├── favorites_bar.py    # Favorite apps dock with dynamic scroll grid
         ├── app_launcher.py     # Package manager & virtual display presets
         ├── stream_panel.py     # Scrcpy parameters (bitrate, fps, encoders)
         ├── command_injector.py # Keystroke simulator & custom shell CLI
-        ├── scrcpy_updater_dialog.py # GitHub binary updater dialog
+        ├── settings_panel.py   # Settings hub, Windows startup & global hotkeys
+        ├── scrcpy_updater_dialog.py # Official Scrcpy binary manager dialog
+        ├── app_updater_dialog.py    # Scrcpy Studio self-updater modal
+        ├── device_profile_dialog.py # Per-device custom profiles & hardware serials
         ├── drop_zone.py        # Drag-and-drop APK installer & file pusher
         └── log_viewer.py       # Real-time color-coded diagnostics terminal
 ```
