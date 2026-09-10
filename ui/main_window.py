@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from PySide6.QtCore import QThread, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtGui import QFont, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -41,6 +41,7 @@ from ui.components.companion_bar import CompanionToolBar
 from ui.components.device_profile_dialog import DeviceProfileDialog
 from ui.components.app_updater_dialog import AppUpdaterDialog
 from core.app_updater import APP_VERSION, AppUpdateChecker
+from core.hotkey_manager import GlobalHotkeyManager
 
 
 class AdbScanWorker(QThread):
@@ -92,7 +93,7 @@ class MainWindow(QMainWindow):
         self.companion_bars: Dict[str, CompanionToolBar] = {}
         self.pending_app_transfers: Dict[str, Tuple[str, str, str]] = {}
 
-        self.setWindowTitle("Scrcpy Studio — Android Control & Mirroring")
+        self.setWindowTitle(f"Scrcpy Studio {APP_VERSION} — Android Control & Mirroring")
         self.resize(1220, 820)
         self.setMinimumSize(960, 640)
 
@@ -100,6 +101,7 @@ class MainWindow(QMainWindow):
         self._update_header_runtime_status()
         self._setup_tray_icon()
         self._wire_signals()
+        self._setup_hotkeys()
         # Immediately render initial pinned offline devices
         self._on_devices_updated([])
         self._start_scanner()
@@ -135,6 +137,16 @@ class MainWindow(QMainWindow):
         lbl_title.setObjectName("headingLabel")
         lbl_title.setStyleSheet("font-size: 16px; font-weight: 800; color: #38BDF8; letter-spacing: 0.5px;")
         title_box.addWidget(lbl_title)
+
+        self.lbl_app_ver = QLabel(APP_VERSION)
+        self.lbl_app_ver.setObjectName("badge")
+        self.lbl_app_ver.setToolTip(f"Scrcpy Studio {APP_VERSION} (Click to check for Studio updates)")
+        self.lbl_app_ver.setStyleSheet(
+            "background-color: #0369A1; color: #FFFFFF; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; border: 1px solid #38BDF866;"
+        )
+        self.lbl_app_ver.setCursor(Qt.PointingHandCursor)
+        self.lbl_app_ver.mousePressEvent = lambda event: self._open_app_updater_dialog()
+        title_box.addWidget(self.lbl_app_ver)
 
         self.lbl_ver = QLabel("Checking...")
         self.lbl_ver.setObjectName("badge")
@@ -432,6 +444,7 @@ class MainWindow(QMainWindow):
         self.settings_panel.app_update_requested.connect(self._open_app_updater_dialog)
         self.settings_panel.refresh_rate_changed.connect(self._on_refresh_rate_changed)
         self.settings_panel.settings_changed.connect(self._save_settings)
+        self.settings_panel.shortcuts_changed.connect(self._apply_hotkeys)
 
         # Process manager signals
         self.process_manager.session_started.connect(self._on_session_started)
@@ -446,6 +459,22 @@ class MainWindow(QMainWindow):
 
     def _on_favorite_app_launch(self, serial: str, package: str, name: str, display_res: str = ""):
         if not self._check_runtime_installed():
+            return
+        if not serial:
+            serial = self.selected_serial or next(
+                (s for s, d in self.devices.items() if getattr(d, "state", getattr(d, "status", "")) == "device"),
+                ""
+            )
+        if not serial:
+            if hasattr(self, "tray_icon") and self.tray_icon.isVisible():
+                self.tray_icon.showMessage(
+                    "Favorite App",
+                    "No connected Android device found.",
+                    QSystemTrayIcon.MessageIcon.Warning,
+                    3000,
+                )
+            else:
+                QMessageBox.warning(self, "No Device", "Please connect an Android device first.")
             return
         session_id = f"{serial}::{package}"
         title = f"[{name}] {serial}"
@@ -567,9 +596,25 @@ class MainWindow(QMainWindow):
         status = "Success" if ok else "Notice"
         self._append_log("AppTransfer", f"[{status}] {msg}")
 
-    def _on_pull_active_phone_app(self, serial: str):
+    def _on_pull_active_phone_app(self, serial: Optional[str] = None):
         """Auto-detect whichever app is currently open on the phone and transfer it to PC Virtual Display."""
-        if not serial or not self._check_runtime_installed():
+        if not serial:
+            serial = self.selected_serial or next(
+                (s for s, d in self.devices.items() if getattr(d, "state", getattr(d, "status", "")) == "device"),
+                None
+            )
+        if not serial:
+            self._append_log("AppTransfer", "[Notice] No connected Android device found to move apps from.")
+            if hasattr(self, "tray_icon") and self.tray_icon.isVisible():
+                self.tray_icon.showMessage(
+                    "Move to PC",
+                    "No connected Android device found.",
+                    QSystemTrayIcon.MessageIcon.Warning,
+                    3000,
+                )
+            return
+
+        if not self._check_runtime_installed():
             return
 
         pkg = self.adb.get_current_focused_package(serial)
@@ -724,6 +769,7 @@ class MainWindow(QMainWindow):
             self.command_injector.set_device(None)
             self.app_launcher.set_device(None)
             self.lbl_status_device.setText("No device connected")
+            self._update_tray_menu()
             return
 
         self.empty_state_widget.setVisible(False)
@@ -846,6 +892,7 @@ class MainWindow(QMainWindow):
             self.card_widgets[serial].set_alias(alias)
         if serial == self.selected_serial:
             self._update_selected_device_state()
+        self._update_tray_menu()
         self._manual_refresh()
 
     def _on_pin_toggled(self, serial: str, is_pinned: bool):
@@ -892,6 +939,7 @@ class MainWindow(QMainWindow):
             self.command_injector.set_device(None)
             self.app_launcher.set_device(None)
             self.lbl_status_device.setText("No device selected")
+            self._update_tray_menu()
             return
 
         dev = self.devices[self.selected_serial]
@@ -904,6 +952,63 @@ class MainWindow(QMainWindow):
         self.app_launcher.set_device(dev.serial)
         self.lbl_status_device.setText(f"Active Device: {alias} ({dev.serial})")
         self._update_tray_menu()
+
+    def _setup_hotkeys(self):
+        """Initialize global Windows hotkey manager and in-app shortcuts."""
+        self.hotkey_manager = GlobalHotkeyManager(int(self.winId()), self)
+        self.hotkey_manager.mirror_triggered.connect(self._on_hotkey_mirror)
+        self.hotkey_manager.move_to_pc_triggered.connect(lambda: self._on_pull_active_phone_app(None))
+        self.hotkey_manager.show_app_triggered.connect(self._restore_from_tray)
+        self.hotkey_manager.status_changed.connect(self._on_hotkey_status_changed)
+        self._in_app_shortcuts = []
+        self._apply_hotkeys()
+
+    def _apply_hotkeys(self):
+        if not hasattr(self, "hotkey_manager"):
+            return
+        sc = self.config.get_shortcuts()
+        self.hotkey_manager.apply_config(sc)
+
+        # Update in-app QShortcut instances for when window is focused
+        for s in getattr(self, "_in_app_shortcuts", []):
+            s.setEnabled(False)
+            s.deleteLater()
+        self._in_app_shortcuts = []
+
+        m_seq = sc.get("mirror_screen", "")
+        if m_seq:
+            sc_m = QShortcut(QKeySequence(m_seq), self)
+            sc_m.activated.connect(self._on_hotkey_mirror)
+            self._in_app_shortcuts.append(sc_m)
+
+        p_seq = sc.get("move_to_pc", "")
+        if p_seq:
+            sc_p = QShortcut(QKeySequence(p_seq), self)
+            sc_p.activated.connect(lambda: self._on_pull_active_phone_app(None))
+            self._in_app_shortcuts.append(sc_p)
+
+        self._update_tray_menu()
+
+    def _on_hotkey_mirror(self):
+        target = self.selected_serial or next(
+            (s for s, d in self.devices.items() if getattr(d, "state", getattr(d, "status", "")) == "device"),
+            None
+        )
+        if target:
+            self._launch_device(target)
+        else:
+            if hasattr(self, "tray_icon") and self.tray_icon.isVisible():
+                self.tray_icon.showMessage(
+                    "Mirror Screen",
+                    "No connected Android device found.",
+                    QSystemTrayIcon.MessageIcon.Warning,
+                    3000,
+                )
+
+    def _on_hotkey_status_changed(self, msg: str):
+        if hasattr(self, "settings_panel"):
+            self.settings_panel.set_hotkey_status(msg)
+        self._append_log("Hotkeys", msg)
 
     def _on_launch_current(self):
         if not self.selected_serial:
@@ -956,16 +1061,16 @@ class MainWindow(QMainWindow):
         """Update header version badge and download/update button styling based on runtime availability."""
         if self.config.is_scrcpy_installed():
             scrcpy_version = self.config.get_scrcpy_version()
-            self.lbl_ver.setText(scrcpy_version)
-            self.lbl_ver.setToolTip(f"Active Scrcpy Runtime: {scrcpy_version} (Click to manage runtime)")
+            self.lbl_ver.setText(f"Scrcpy {scrcpy_version}")
+            self.lbl_ver.setToolTip(f"Bundled Scrcpy Binary Engine: {scrcpy_version} (Click to manage runtime)")
             self.lbl_ver.setStyleSheet(
-                "background-color: #1E222D; color: #38BDF8; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; border: 1px solid #38BDF833;"
+                "background-color: #1E222D; color: #94A3B8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px; border: 1px solid #334155;"
             )
             self.lbl_ver.setCursor(Qt.PointingHandCursor)
             # Hide the action button when already installed and up to date
             self.btn_header_update.setVisible(False)
         else:
-            self.lbl_ver.setText("🔴 Not Installed")
+            self.lbl_ver.setText("Scrcpy: Not Installed")
             self.lbl_ver.setToolTip("Scrcpy runtime binaries are not downloaded yet.")
             self.lbl_ver.setStyleSheet(
                 "background-color: #7F1D1D; color: #FCA5A5; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;"
@@ -1175,29 +1280,35 @@ class MainWindow(QMainWindow):
         # Determine target device (selected or first online connected device)
         online_serials = [
             s for s, d in self.devices.items()
-            if getattr(d, "status", "") == "device"
+            if getattr(d, "state", getattr(d, "status", "")) == "device"
         ]
         target_serial = (
             self.selected_serial
-            if (self.selected_serial and self.selected_serial in self.devices and getattr(self.devices[self.selected_serial], "status", "") == "device")
+            if (self.selected_serial and self.selected_serial in self.devices and getattr(self.devices[self.selected_serial], "state", getattr(self.devices[self.selected_serial], "status", "")) == "device")
             else (online_serials[0] if online_serials else None)
         )
 
         # Title / Device Header & Actions
+        shortcuts = self.config.get_shortcuts()
+        sc_mirror = shortcuts.get("mirror_screen", "")
+        sc_pull = shortcuts.get("move_to_pc", "")
+        lbl_mirror = f"🚀 Mirror Phone Screen\t({sc_mirror})" if sc_mirror else "🚀 Mirror Phone Screen"
+        lbl_pull = f"🔀 Move to PC (Active App)\t({sc_pull})" if sc_pull else "🔀 Move to PC (Active App)"
+
         if target_serial:
             dev = self.devices.get(target_serial)
             dev_name = self.config.get_device_alias(target_serial, dev.display_name if dev else target_serial)
-            header_act = self.tray_menu.addAction(f"📱 Connected: {dev_name}")
+            header_act = self.tray_menu.addAction(f"📱 {dev_name}")
             header_act.setEnabled(False)
             font = header_act.font()
             font.setBold(True)
             header_act.setFont(font)
 
-            act_mirror = self.tray_menu.addAction("🚀 Mirror Phone Screen")
+            act_mirror = self.tray_menu.addAction(lbl_mirror)
             act_mirror.triggered.connect(lambda _, s=target_serial: self._launch_device(s))
 
-            act_pull = self.tray_menu.addAction("🔀 Move to PC (Active App)")
-            act_pull.setToolTip("Detect active app open on phone screen and transfer to PC Virtual Display")
+            act_pull = self.tray_menu.addAction(lbl_pull)
+            act_pull.setToolTip(f"Detect active app open on phone screen and transfer to PC Virtual Display ({sc_pull})")
             act_pull.triggered.connect(lambda _, s=target_serial: self._on_pull_active_phone_app(s))
 
             # Multi-device switcher if multiple devices are online
@@ -1212,6 +1323,10 @@ class MainWindow(QMainWindow):
         else:
             header_act = self.tray_menu.addAction("📱 No Device Connected")
             header_act.setEnabled(False)
+
+            act_pull = self.tray_menu.addAction(lbl_pull)
+            act_pull.setToolTip(f"No connected device detected. Connect a device or click Refresh Devices ({sc_pull}).")
+            act_pull.triggered.connect(lambda: self._on_pull_active_phone_app(None))
 
         self.tray_menu.addSeparator()
 
@@ -1286,6 +1401,8 @@ class MainWindow(QMainWindow):
 
     def _force_quit(self):
         self._append_log("System", "Quitting Scrcpy Studio...")
+        if hasattr(self, "hotkey_manager"):
+            self.hotkey_manager.cleanup()
         self.tray_icon.hide()
         self.scanner.stop()
         self.command_injector.stop()

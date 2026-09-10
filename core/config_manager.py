@@ -28,6 +28,18 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "last_selected_serial": "",
     "recent_wireless_ips": [],
     "pinned_devices": [],
+    "close_to_tray": True,
+    "start_minimized": False,
+    "enable_companion_toolbar": True,
+    "notifications_enabled": True,
+    "auto_reconnect_pinned": False,
+    "smart_screen_awake": False,
+    "shortcuts": {
+        "global_hotkeys_enabled": True,
+        "mirror_screen": "Ctrl+Shift+M",
+        "move_to_pc": "Ctrl+Shift+P",
+        "show_app": "Ctrl+Shift+S"
+    },
     "active_preset": "Balanced (1080p 60fps 8M)",
     "presets": {
         "Balanced (1080p 60fps 8M)": {
@@ -252,6 +264,30 @@ class ConfigManager:
             p.get("serial") == serial or (hardware_serial and p.get("hardware_serial") == hardware_serial)
             for p in self.get_pinned_devices()
         )
+
+    # === GLOBAL SHORTCUTS ===
+
+    def get_shortcuts(self) -> Dict[str, Any]:
+        """Return global hotkeys & shortcuts configuration dictionary."""
+        default_sc = DEFAULT_CONFIG.get("shortcuts", {})
+        saved_sc = self.data.get("shortcuts", {})
+        merged = default_sc.copy()
+        merged.update(saved_sc)
+        return merged
+
+    def set_shortcut(self, action: str, key_sequence: str) -> None:
+        """Set key sequence for an action and save config."""
+        if "shortcuts" not in self.data:
+            self.data["shortcuts"] = DEFAULT_CONFIG.get("shortcuts", {}).copy()
+        self.data["shortcuts"][action] = key_sequence
+        self.save()
+
+    def set_global_hotkeys_enabled(self, enabled: bool) -> None:
+        """Toggle system-wide global hotkeys on/off."""
+        if "shortcuts" not in self.data:
+            self.data["shortcuts"] = DEFAULT_CONFIG.get("shortcuts", {}).copy()
+        self.data["shortcuts"]["global_hotkeys_enabled"] = enabled
+        self.save()
 
     # === PER-CONNECTED DEVICE PROFILES ===
 

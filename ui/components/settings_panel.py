@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -10,6 +11,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QKeySequenceEdit,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -28,6 +30,7 @@ class SettingsPanel(QWidget):
     """Configuration panel for application settings, Windows startup, tray behavior, and cache."""
 
     settings_changed = Signal()
+    shortcuts_changed = Signal()
     runtime_update_requested = Signal()
     app_update_requested = Signal()
     refresh_rate_changed = Signal(int)  # ms
@@ -65,9 +68,9 @@ class SettingsPanel(QWidget):
         self.chk_start_on_boot.toggled.connect(self._on_start_on_boot_toggled)
         w_layout.addWidget(self.chk_start_on_boot)
 
-        # Sub-option: Start Minimized
+        # Start Minimized
         self.chk_start_minimized = QCheckBox("📥 Start minimized to System Tray (silent background startup)")
-        self.chk_start_minimized.setStyleSheet("font-size: 12px; color: #94A3B8; margin-left: 24px;")
+        self.chk_start_minimized.setStyleSheet("font-size: 13px; font-weight: 500; color: #F1F5F9;")
         self.chk_start_minimized.toggled.connect(self._on_setting_changed)
         w_layout.addWidget(self.chk_start_minimized)
 
@@ -127,7 +130,61 @@ class SettingsPanel(QWidget):
 
         layout.addWidget(grp_devices)
 
-        # --- SECTION 3: SCRCPY RUNTIME & STORAGE ---
+        # --- SECTION 3: KEYBOARD SHORTCUTS & GLOBAL HOTKEYS ---
+        grp_shortcuts = QGroupBox("⌨️ Global Hotkeys & Shortcut Management")
+        k_layout = QVBoxLayout(grp_shortcuts)
+        k_layout.setContentsMargins(14, 16, 14, 16)
+        k_layout.setSpacing(12)
+
+        self.chk_global_hotkeys = QCheckBox("⚡ Enable System-Wide Global Hotkeys (works even when minimized or in tray)")
+        self.chk_global_hotkeys.setStyleSheet("font-size: 13px; font-weight: 500; color: #F1F5F9;")
+        self.chk_global_hotkeys.toggled.connect(self._on_hotkey_setting_changed)
+        k_layout.addWidget(self.chk_global_hotkeys)
+
+        grid_sc = QGridLayout()
+        grid_sc.setHorizontalSpacing(16)
+        grid_sc.setVerticalSpacing(10)
+
+        lbl_m = QLabel("🚀 Mirror Phone Screen:")
+        lbl_m.setStyleSheet("color: #94A3B8; font-size: 12px; font-weight: 600;")
+        self.kse_mirror = QKeySequenceEdit()
+        self.kse_mirror.setFixedWidth(220)
+        self.kse_mirror.keySequenceChanged.connect(self._on_hotkey_setting_changed)
+        grid_sc.addWidget(lbl_m, 0, 0)
+        grid_sc.addWidget(self.kse_mirror, 0, 1)
+
+        lbl_p = QLabel("🔀 Move to PC (Active App):")
+        lbl_p.setStyleSheet("color: #94A3B8; font-size: 12px; font-weight: 600;")
+        self.kse_move_to_pc = QKeySequenceEdit()
+        self.kse_move_to_pc.setFixedWidth(220)
+        self.kse_move_to_pc.keySequenceChanged.connect(self._on_hotkey_setting_changed)
+        grid_sc.addWidget(lbl_p, 1, 0)
+        grid_sc.addWidget(self.kse_move_to_pc, 1, 1)
+
+        lbl_s = QLabel("🪟 Show Scrcpy Studio:")
+        lbl_s.setStyleSheet("color: #94A3B8; font-size: 12px; font-weight: 600;")
+        self.kse_show_app = QKeySequenceEdit()
+        self.kse_show_app.setFixedWidth(220)
+        self.kse_show_app.keySequenceChanged.connect(self._on_hotkey_setting_changed)
+        grid_sc.addWidget(lbl_s, 2, 0)
+        grid_sc.addWidget(self.kse_show_app, 2, 1)
+
+        k_layout.addLayout(grid_sc)
+
+        btn_row = QHBoxLayout()
+        self.lbl_hotkey_status = QLabel("Click any box and press desired keys (e.g. Ctrl+Shift+M).")
+        self.lbl_hotkey_status.setStyleSheet("color: #64748B; font-size: 11px;")
+        btn_row.addWidget(self.lbl_hotkey_status, 1)
+
+        self.btn_reset_shortcuts = QPushButton("↺ Reset to Defaults")
+        self.btn_reset_shortcuts.setCursor(Qt.PointingHandCursor)
+        self.btn_reset_shortcuts.clicked.connect(self._reset_shortcuts)
+        btn_row.addWidget(self.btn_reset_shortcuts)
+        k_layout.addLayout(btn_row)
+
+        layout.addWidget(grp_shortcuts)
+
+        # --- SECTION 4: SCRCPY RUNTIME & STORAGE ---
         grp_runtime = QGroupBox("📦 Scrcpy Engine & Storage Management")
         r_layout = QVBoxLayout(grp_runtime)
         r_layout.setContentsMargins(14, 16, 14, 16)
@@ -242,7 +299,6 @@ class SettingsPanel(QWidget):
             # 1. Startup & System Tray
             is_boot = SystemManager.is_start_on_boot_enabled()
             self.chk_start_on_boot.setChecked(is_boot)
-            self.chk_start_minimized.setEnabled(is_boot)
             self.chk_start_minimized.setChecked(self.config.get("start_minimized", False))
             self.chk_close_to_tray.setChecked(self.config.get("close_to_tray", True))
             self.chk_companion_toolbar.setChecked(self.config.get("enable_companion_toolbar", True))
@@ -258,7 +314,14 @@ class SettingsPanel(QWidget):
             if idx >= 0:
                 self.combo_scan_interval.setCurrentIndex(idx)
 
-            # 3. Runtime & Directories
+            # 3. Shortcuts & Global Hotkeys
+            sc = self.config.get_shortcuts()
+            self.chk_global_hotkeys.setChecked(sc.get("global_hotkeys_enabled", True))
+            self.kse_mirror.setKeySequence(QKeySequence(sc.get("mirror_screen", "Ctrl+Shift+M")))
+            self.kse_move_to_pc.setKeySequence(QKeySequence(sc.get("move_to_pc", "Ctrl+Shift+P")))
+            self.kse_show_app.setKeySequence(QKeySequence(sc.get("show_app", "Ctrl+Shift+S")))
+
+            # 4. Runtime & Directories
             if self.config.is_scrcpy_installed():
                 self.lbl_runtime_badge.setText(self.config.get_scrcpy_version())
                 self.lbl_runtime_badge.setStyleSheet(
@@ -280,7 +343,6 @@ class SettingsPanel(QWidget):
         self.lbl_cache_info.setText(f"App Icon Cache: {stats['count']} cached icons ({stats['size_mb']} MB)")
 
     def _on_start_on_boot_toggled(self, checked: bool):
-        self.chk_start_minimized.setEnabled(checked)
         if not self._block_signals:
             minimized = self.chk_start_minimized.isChecked()
             SystemManager.set_start_on_boot(checked, start_minimized=minimized)
@@ -330,3 +392,34 @@ class SettingsPanel(QWidget):
             count = SystemManager.clear_icon_cache()
             self.update_cache_stats()
             QMessageBox.information(self, "Cache Cleared", f"Successfully cleared {count} cached app icon files.")
+
+    def set_hotkey_status(self, status: str):
+        self.lbl_hotkey_status.setText(status)
+        if "conflict" in status.lower() or "error" in status.lower():
+            self.lbl_hotkey_status.setStyleSheet("color: #F87171; font-size: 11px;")
+        else:
+            self.lbl_hotkey_status.setStyleSheet("color: #34D399; font-size: 11px;")
+
+    def _on_hotkey_setting_changed(self):
+        if self._block_signals:
+            return
+        m_seq = self.kse_mirror.keySequence().toString()
+        p_seq = self.kse_move_to_pc.keySequence().toString()
+        s_seq = self.kse_show_app.keySequence().toString()
+        enabled = self.chk_global_hotkeys.isChecked()
+
+        self.config.set_shortcut("mirror_screen", m_seq)
+        self.config.set_shortcut("move_to_pc", p_seq)
+        self.config.set_shortcut("show_app", s_seq)
+        self.config.set_global_hotkeys_enabled(enabled)
+        self.shortcuts_changed.emit()
+        self.settings_changed.emit()
+
+    def _reset_shortcuts(self):
+        self._block_signals = True
+        self.chk_global_hotkeys.setChecked(True)
+        self.kse_mirror.setKeySequence(QKeySequence("Ctrl+Shift+M"))
+        self.kse_move_to_pc.setKeySequence(QKeySequence("Ctrl+Shift+P"))
+        self.kse_show_app.setKeySequence(QKeySequence("Ctrl+Shift+S"))
+        self._block_signals = False
+        self._on_hotkey_setting_changed()

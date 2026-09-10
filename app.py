@@ -41,10 +41,22 @@ def main():
 
     config = ConfigManager()
     window = MainWindow(config)
-    
-    if "--minimized" in sys.argv or "-m" in sys.argv:
+
+    start_min = (
+        "--minimized" in sys.argv
+        or "-m" in sys.argv
+        or config.get("start_minimized", False)
+    ) and ("--show" not in sys.argv)
+
+    if start_min:
         # Start minimized to system tray
-        pass
+        if config.get("notifications_enabled", True) and hasattr(window, "tray_icon") and window.tray_icon.isVisible():
+            window.tray_icon.showMessage(
+                "Scrcpy Studio",
+                "Started minimized to system tray.",
+                window.tray_icon.MessageIcon.Information,
+                2500,
+            )
     else:
         window.show()
 
