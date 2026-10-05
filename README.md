@@ -58,7 +58,7 @@
 * **Custom Keybinding Hub**: Record custom key combinations in **Settings** via interactive `QKeySequenceEdit` with real-time Win32 conflict detection and live tray menu hints.
 
 ### 🔄 9. Dual Interactive Badges & Auto-Updaters
-* **Interactive Header Version Badges**: Clearly distinguishes between the **Scrcpy Studio Version** (`v1.0.7`) and the **Bundled Scrcpy Engine Version** (`Scrcpy v5.0`) with zero layout clutter. Badges dynamically transform into glowing update pills (`v1.0.6 ⬆ v1.0.7`, `Scrcpy v4.1 ⬆ v5.0`) when releases are available.
+* **Interactive Header Version Badges**: Clearly distinguishes between the **Scrcpy Studio Version** (`v1.0.8`) and the **Bundled Scrcpy Engine Version** (`Scrcpy v5.0`) with zero layout clutter. Badges dynamically transform into glowing update pills (`v1.0.7 ⬆ v1.0.8`, `Scrcpy v4.1 ⬆ v5.0`) when releases are available.
 * **Scrcpy Studio Self-Updater**: Automatically checks the official Scrcpy Studio GitHub releases in the background, displays interactive header badges, and provides 1-click self-updating with changelog viewer.
 * **Scrcpy Binary Downloader**: Automatically checks for official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) 64-bit Windows releases and extracts runtime binaries directly to `scrcpy/` with zero manual setup.
 
