@@ -286,8 +286,8 @@ class StreamPanel(QWidget):
         self.chk_turn_off.toggled.connect(self._on_setting_changed)
         grid_disp.addWidget(self.chk_turn_off, 0, 0)
 
-        self.chk_stay_awake = QCheckBox("Stay Awake While Connected (-w)")
-        self.chk_stay_awake.setToolTip("Prevent device from sleeping while scrcpy is active (-w)")
+        self.chk_stay_awake = QCheckBox("Stay Awake While Charging (-w)")
+        self.chk_stay_awake.setToolTip("Prevent device from sleeping while plugged in / charging during mirroring (-w)")
         self.chk_stay_awake.setChecked(True)
         self.chk_stay_awake.toggled.connect(self._on_setting_changed)
         grid_disp.addWidget(self.chk_stay_awake, 0, 1)

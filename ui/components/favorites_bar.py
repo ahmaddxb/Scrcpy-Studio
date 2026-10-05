@@ -329,7 +329,8 @@ class FavoriteAppEditDialog(QDialog):
         self.chk_turn_screen_off.setChecked(bool(turn_screen_off))
         l_dev.addWidget(self.chk_turn_screen_off)
 
-        self.chk_stay_awake = QCheckBox("💡 Keep Device Awake (--stay-awake)")
+        self.chk_stay_awake = QCheckBox("💡 Stay Awake While Charging (--stay-awake)")
+        self.chk_stay_awake.setToolTip("Prevent device from sleeping while plugged in / charging during session (--stay-awake)")
         self.chk_stay_awake.setChecked(bool(stay_awake))
         l_dev.addWidget(self.chk_stay_awake)
 

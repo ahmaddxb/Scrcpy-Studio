@@ -206,5 +206,13 @@ class ScrcpyDownloadWorker(QThread):
                     startupinfo=startupinfo,
                     creationflags=creationflags
                 )
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/F", "/IM", "adb.exe"],
+                    stdin=subprocess.DEVNULL,
+                    capture_output=True,
+                    timeout=3,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
         except Exception:
             pass

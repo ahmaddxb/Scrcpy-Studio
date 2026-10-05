@@ -670,7 +670,7 @@ class ConfigManager:
         # Default destination for downloads
         return project_root / "scrcpy"
 
-    _cached_scrcpy_version: Optional[str] = "v4.1"
+    _cached_scrcpy_version: Optional[str] = None
 
     def get_scrcpy_version(self, force_refresh: bool = False) -> str:
         """Query real Scrcpy version directly from the scrcpy.exe binary (cached in memory for instantaneous lookup)."""
@@ -708,7 +708,7 @@ class ConfigManager:
             if m_dir:
                 self._cached_scrcpy_version = f"v{m_dir.group(1)}"
                 return self._cached_scrcpy_version
-            self._cached_scrcpy_version = "v4.1"
-            return "v4.1"
+            self._cached_scrcpy_version = "Unknown"
+            return "Unknown"
 
         return "Not Downloaded"

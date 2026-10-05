@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.13+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![PySide6](https://img.shields.io/badge/GUI-PySide6%20%2F%20Qt6-41CD52?logo=qt&logoColor=white)](https://pypi.org/project/PySide6/)
-[![Scrcpy](https://img.shields.io/badge/Scrcpy-v4.1+-blue?logo=android)](https://github.com/Genymobile/scrcpy)
+[![Scrcpy](https://img.shields.io/badge/Scrcpy-v5.0+-blue?logo=android)](https://github.com/Genymobile/scrcpy)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011-0078D6?logo=windows&logoColor=white)](https://microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-Apache%202.0-orange)](LICENSE.txt)
 
@@ -58,7 +58,7 @@
 * **Custom Keybinding Hub**: Record custom key combinations in **Settings** via interactive `QKeySequenceEdit` with real-time Win32 conflict detection and live tray menu hints.
 
 ### 🔄 9. Dual Version Badges & Auto-Updaters
-* **Distinct Header Version Badges**: Clearly distinguishes between the **Scrcpy Studio Version** (`v1.0.6`) and the **Bundled Scrcpy Engine Version** (`Scrcpy v4.1`).
+* **Distinct Header Version Badges**: Clearly distinguishes between the **Scrcpy Studio Version** (`v1.0.7`) and the **Bundled Scrcpy Engine Version** (`Scrcpy v5.0`).
 * **Scrcpy Studio Self-Updater**: Automatically checks the official Scrcpy Studio GitHub releases in the background, displays header update badges, and provides 1-click self-updating with changelog viewer.
 * **Scrcpy Binary Downloader**: Automatically checks for official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) 64-bit Windows releases and extracts runtime binaries directly to `scrcpy/` with zero manual setup.
 

@@ -157,10 +157,10 @@ class ScrcpyUpdaterDialog(QDialog):
 
         layout.addLayout(btn_row)
 
-    def _update_version_display(self):
+    def _update_version_display(self, force_refresh: bool = False):
         """Update the installed version label with matching clean styling."""
         if self.config.is_scrcpy_installed():
-            current_ver = self.config.get_scrcpy_version()
+            current_ver = self.config.get_scrcpy_version(force_refresh=force_refresh)
             self.lbl_curr_ver.setText(current_ver)
             self.lbl_curr_ver.setStyleSheet("color: #38BDF8; font-weight: bold; font-size: 13px; font-family: monospace;")
         else:
@@ -175,7 +175,7 @@ class ScrcpyUpdaterDialog(QDialog):
         self.badge_status.setStyleSheet("background: #334155; color: #94A3B8; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
         self.lbl_progress_status.setText("Fetching release metadata from GitHub...")
 
-        current_ver = self.config.get_scrcpy_version()
+        current_ver = self.config.get_scrcpy_version(force_refresh=True)
         self.checker = ScrcpyUpdateChecker(current_ver, self)
         self.checker.check_finished.connect(self._on_check_finished)
         self.checker.start()
@@ -252,12 +252,12 @@ class ScrcpyUpdaterDialog(QDialog):
 
         if success:
             self.progress_bar.setValue(100)
-            self._update_version_display()
+            self._update_version_display(force_refresh=True)
             self.badge_status.setText("Up to Date ✓")
             self.badge_status.setStyleSheet("background: #14532D; color: #BBF7D0; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
             self.btn_action.setText("🔄 Reinstall / Repair Scrcpy")
             self.lbl_progress_status.setText("Update installed successfully!")
-            new_ver = self.config.get_scrcpy_version()
+            new_ver = self.config.get_scrcpy_version(force_refresh=True)
             self.scrcpy_updated.emit(new_ver)
             QMessageBox.information(self, "Scrcpy Updated", f"Scrcpy runtime has been updated successfully to {new_ver}!\n\nLocation: {self.config.get_scrcpy_bin_dir()}")
         else:

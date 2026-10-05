@@ -23,6 +23,8 @@ class AdbDevice:
     connection_type: str = "usb"  # 'usb', 'wifi', 'ethernet'
     battery_level: Optional[int] = None
     battery_status: str = ""
+    is_charging: bool = False
+    screen_off_timeout: Optional[int] = None
     wifi_ip: str = ""
     hardware_serial: str = ""
 

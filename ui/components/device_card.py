@@ -299,8 +299,9 @@ class DeviceCard(QFrame):
         )
 
         # 2. Update screen timeout badge & battery info
-        if not self.is_offline and self.device.screen_off_timeout is not None:
-            ms = self.device.screen_off_timeout
+        timeout_ms = getattr(self.device, "screen_off_timeout", None)
+        if not self.is_offline and timeout_ms is not None:
+            ms = timeout_ms
             if ms >= 86400000 or ms >= 2000000000:
                 t_str = "⏱️ 24h (Awake)"
                 t_color = "#38BDF8"  # Cyan/Blue
@@ -323,10 +324,12 @@ class DeviceCard(QFrame):
         else:
             self.timeout_label.setVisible(False)
 
-        if not self.is_offline and self.device.battery_level is not None:
-            bat_icon = "⚡" if self.device.is_charging else "🔋"
-            bat_color = "#10B981" if self.device.battery_level > 20 else "#EF4444"
-            self.bat_label.setText(f"{bat_icon} {self.device.battery_level}%")
+        bat_level = getattr(self.device, "battery_level", None)
+        if not self.is_offline and bat_level is not None:
+            is_charging = getattr(self.device, "is_charging", False)
+            bat_icon = "⚡" if is_charging else "🔋"
+            bat_color = "#10B981" if bat_level > 20 else "#EF4444"
+            self.bat_label.setText(f"{bat_icon} {bat_level}%")
             self.bat_label.setStyleSheet(f"color: {bat_color}; font-size: 11px; font-weight: 600;")
             self.bat_label.setVisible(True)
         else:
