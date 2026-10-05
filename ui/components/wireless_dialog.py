@@ -72,9 +72,9 @@ class WirelessDialog(QDialog):
 
         local_ip, def_subnet = get_local_ip_and_subnet()
         self.edit_subnet = QLineEdit(def_subnet)
-        self.edit_subnet.setPlaceholderText("192.168.1.")
-        self.edit_subnet.setFixedWidth(120)
-        self.edit_subnet.setToolTip("Subnet prefix to scan (e.g. 192.168.1.)")
+        self.edit_subnet.setPlaceholderText("e.g. 10.10.0.0/22 or 192.168.1.0/24")
+        self.edit_subnet.setFixedWidth(160)
+        self.edit_subnet.setToolTip("Subnet CIDR or prefix to scan (e.g. 10.10.0.0/22, 192.168.1.0/24, or 192.168.1.)")
 
         lbl_sub = QLabel("Subnet:")
         lbl_sub.setStyleSheet("color: #94A3B8; font-weight: 500;")
@@ -138,6 +138,20 @@ class WirelessDialog(QDialog):
             }
         """)
         l_scan.addWidget(self.table_devs, 1)
+
+        # Enterprise / Office Wi-Fi Tip Banner
+        tip_box = QFrame()
+        tip_box.setStyleSheet("background-color: #141721; border: 1px solid #1E293B; border-radius: 6px; padding: 4px;")
+        l_tip = QHBoxLayout(tip_box)
+        l_tip.setContentsMargins(8, 4, 8, 4)
+        l_tip.setSpacing(8)
+        tip_icon = QLabel("💡")
+        tip_text = QLabel("<b>Work / Enterprise Wi-Fi:</b> If corporate AP isolation or Android 11+ dynamic ports prevent scanner discovery, connect directly via <b>🌐 Direct IP Connect</b> using your phone's displayed IP & Port.")
+        tip_text.setWordWrap(True)
+        tip_text.setStyleSheet("color: #94A3B8; font-size: 11px;")
+        l_tip.addWidget(tip_icon)
+        l_tip.addWidget(tip_text, 1)
+        l_scan.addWidget(tip_box)
 
         self.tabs.addTab(tab_scanner, "🔍 Network Scanner")
 
@@ -273,8 +287,10 @@ class WirelessDialog(QDialog):
             return
 
         subnet = self.edit_subnet.text().strip()
-        if not subnet.endswith("."):
-            subnet += "."
+        if "/" not in subnet and not subnet.endswith("."):
+            parts = [p for p in subnet.split(".") if p]
+            if len(parts) <= 3:
+                subnet += "."
 
         self.discovered_devices.clear()
         self.table_devs.setRowCount(0)
@@ -283,7 +299,7 @@ class WirelessDialog(QDialog):
         self.btn_scan.setText("⏳ Scanning...")
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
-        self.lbl_scan_status.setText(f"Scanning subnet {subnet}0/24 on port 5555 and mDNS...")
+        self.lbl_scan_status.setText(f"Scanning {subnet} on port 5555 and mDNS...")
         self.lbl_scan_status.setStyleSheet("color: #38BDF8;")
 
         self.scanner_worker = NetworkScannerWorker(self.adb, subnet_prefix=subnet, parent=None)

@@ -13,7 +13,7 @@ from typing import Dict, Optional, Tuple
 
 from PySide6.QtCore import QObject, QThread, Signal
 
-APP_VERSION = "v1.0.8"
+APP_VERSION = "v1.0.9"
 GITHUB_STUDIO_API = "https://api.github.com/repos/ahmaddxb/Scrcpy-Studio/releases/latest"
 
 
