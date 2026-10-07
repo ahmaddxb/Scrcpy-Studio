@@ -4,6 +4,7 @@ import os
 import re
 import socket
 import subprocess
+import time
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Set, Tuple
 
@@ -129,12 +130,15 @@ class NetworkScannerWorker(QThread):
         adb: AdbManager,
         subnet_prefix: Optional[str] = None,
         scan_ports: Optional[List[int]] = None,
+        priority_endpoints: Optional[List[str]] = None,
         parent=None
     ):
         super().__init__(parent)
         self.adb = adb
         self.subnet_prefix = subnet_prefix
-        self.scan_ports = scan_ports or [5555, 5556, 5557, 5558]
+        # Default to standard ADB port 5555 to prevent 4x traffic explosion on enterprise networks
+        self.scan_ports = scan_ports or [5555]
+        self.priority_endpoints = priority_endpoints or []
         self._running = True
         self._executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
 
@@ -161,14 +165,52 @@ class NetworkScannerWorker(QThread):
         if not self._running:
             return
 
-        # 1. First, check ADB mDNS discovery (Android 11+ Wireless Debugging)
+        found_endpoints: Set[str] = set()
+
+        # 0. Immediate Priority Probe (Pinned & Recent Devices)
+        # Check known devices with a higher timeout & retries to wake phone Wi-Fi chips (DTIM) and resolve ARP
+        if self.priority_endpoints:
+            for ep_str in self.priority_endpoints:
+                if not self._running:
+                    return
+                try:
+                    if ":" in ep_str:
+                        p_ip, p_port_str = ep_str.split(":", 1)
+                        p_port = int(p_port_str)
+                    else:
+                        p_ip = ep_str
+                        p_port = 5555
+
+                    res = self._check_socket(p_ip, p_port, timeout=0.6, retries=2)
+                    if res and self._running:
+                        found_ip, found_port = res
+                        found_ep = f"{found_ip}:{found_port}"
+                        if found_ep not in found_endpoints:
+                            found_endpoints.add(found_ep)
+                            dev = DiscoveredWirelessDevice(
+                                ip=found_ip,
+                                port=found_port,
+                                hostname="",
+                                is_already_connected=(found_ep in already_connected_serials)
+                            )
+                            discovered.append(dev)
+                            self.device_found.emit(dev)
+                except Exception:
+                    pass
+
+        if not self._running:
+            return
+
+        # 1. Check ADB mDNS discovery (Android 11+ Wireless Debugging)
         mdns_devices = self._scan_mdns()
         for dev in mdns_devices:
             if not self._running:
                 return
-            dev.is_already_connected = (dev.endpoint in already_connected_serials)
-            discovered.append(dev)
-            self.device_found.emit(dev)
+            if dev.endpoint not in found_endpoints:
+                found_endpoints.add(dev.endpoint)
+                dev.is_already_connected = (dev.endpoint in already_connected_serials)
+                discovered.append(dev)
+                self.device_found.emit(dev)
 
         if not self._running:
             return
@@ -177,9 +219,8 @@ class NetworkScannerWorker(QThread):
         local_ip, def_network = get_local_ip_and_subnet()
         host_ips = resolve_scan_targets(self.subnet_prefix, local_ip, def_network)
 
-        # Build list of (ip, port) targets
+        # Build list of (ip, port) targets, excluding already discovered priority endpoints
         targets: List[Tuple[str, int]] = []
-        found_endpoints = {d.endpoint for d in discovered}
 
         for ip in host_ips:
             for p in self.scan_ports:
@@ -190,12 +231,12 @@ class NetworkScannerWorker(QThread):
         total = len(targets)
         completed = 0
 
-        # Scan targets in parallel with scaled worker pool for /22 subnets
-        workers = min(150, max(40, len(targets) // 4)) if targets else 40
+        # Scan targets in parallel with paced worker pool to avoid triggering enterprise AP SYN-flood filters
+        workers = min(75, max(30, len(targets) // 4)) if targets else 30
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
         try:
             future_to_target = {
-                self._executor.submit(self._check_socket, ip, port): (ip, port)
+                self._executor.submit(self._check_socket, ip, port, 0.5, 1): (ip, port)
                 for (ip, port) in targets
             }
 
@@ -237,25 +278,31 @@ class NetworkScannerWorker(QThread):
         if self._running:
             self.scan_finished.emit(discovered)
 
-    def _check_socket(self, ip: str, port: int, timeout: float = 0.25) -> Optional[Tuple[str, int]]:
+    def _check_socket(self, ip: str, port: int, timeout: float = 0.5, retries: int = 1) -> Optional[Tuple[str, int]]:
+        """Probe TCP socket with adaptive timeout and retry for Wi-Fi DTIM sleep and ARP discovery."""
         if not self._running:
             return None
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(timeout)
-            result = sock.connect_ex((ip, port))
-            sock.close()
-            if result == 0:
-                return ip, port
-        except Exception:
-            pass
+        for attempt in range(retries + 1):
+            if not self._running:
+                return None
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(timeout)
+                result = sock.connect_ex((ip, port))
+                sock.close()
+                if result == 0:
+                    return ip, port
+            except Exception:
+                pass
+            if attempt < retries and self._running:
+                time.sleep(0.04)
         return None
 
     def _scan_mdns(self) -> List[DiscoveredWirelessDevice]:
         """Query adb mdns services for Android 11+ wireless debugging services."""
         devices = []
         try:
-            code, out, _ = self.adb._run_cmd(["mdns", "services"], timeout=2)
+            code, out, _ = self.adb._run_cmd(["mdns", "services"], timeout=3)
             if code == 0 and out:
                 for line in out.splitlines():
                     if not self._running:

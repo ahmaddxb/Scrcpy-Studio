@@ -302,7 +302,28 @@ class WirelessDialog(QDialog):
         self.lbl_scan_status.setText(f"Scanning {subnet} on port 5555 and mDNS...")
         self.lbl_scan_status.setStyleSheet("color: #38BDF8;")
 
-        self.scanner_worker = NetworkScannerWorker(self.adb, subnet_prefix=subnet, parent=None)
+        # Collect priority endpoints from config (pinned devices & recent IPs)
+        priority_endpoints: List[str] = []
+        try:
+            pinned = self.config.get("pinned_devices", [])
+            for p in pinned:
+                if isinstance(p, dict):
+                    serial = p.get("serial", "")
+                    if ":" in serial:
+                        priority_endpoints.append(serial)
+            recents = self.config.get("recent_wireless_ips", [])
+            for r in recents:
+                if isinstance(r, str) and ":" in r and r not in priority_endpoints:
+                    priority_endpoints.append(r)
+        except Exception:
+            pass
+
+        self.scanner_worker = NetworkScannerWorker(
+            self.adb,
+            subnet_prefix=subnet,
+            priority_endpoints=priority_endpoints,
+            parent=None
+        )
         self.scanner_worker.device_found.connect(self._on_device_discovered)
         self.scanner_worker.progress.connect(self._on_scan_progress)
         self.scanner_worker.scan_finished.connect(self._on_scan_finished)
@@ -324,8 +345,19 @@ class WirelessDialog(QDialog):
         item_ep.setForeground(Qt.white)
         self.table_devs.setItem(row, 0, item_ep)
 
-        # Hostname / Service
-        info_str = dev.service_name or dev.hostname or "Android Wireless Device"
+        # Hostname / Service / Friendly Name
+        info_str = dev.service_name or dev.hostname or ""
+        try:
+            pinned = self.config.get("pinned_devices", [])
+            for p in pinned:
+                if isinstance(p, dict) and p.get("serial") == dev.endpoint and p.get("name"):
+                    info_str = f"⭐ {p['name']}"
+                    break
+        except Exception:
+            pass
+        if not info_str:
+            info_str = "Android Wireless Device"
+
         item_info = QTableWidgetItem(info_str)
         item_info.setForeground(Qt.lightGray)
         self.table_devs.setItem(row, 1, item_info)
