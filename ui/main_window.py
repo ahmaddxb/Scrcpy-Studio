@@ -675,6 +675,13 @@ class MainWindow(QMainWindow):
             self._append_log("IconManager", f"Retrieved '{pkg}' icon from {detail} metadata")
 
     def _start_scanner(self):
+        if hasattr(self, "scanner") and self.scanner:
+            try:
+                self.scanner.devices_updated.disconnect()
+            except Exception:
+                pass
+            if self.scanner.isRunning():
+                self.scanner.stop()
         interval = self.config.get("auto_refresh_interval_ms", 2000)
         self.scanner = AdbDeviceScanner(self.adb, interval_ms=interval, parent=self)
         self.scanner.devices_updated.connect(self._on_devices_updated)
@@ -1347,6 +1354,11 @@ class MainWindow(QMainWindow):
     def _open_updater_dialog(self):
         from ui.components.scrcpy_updater_dialog import ScrcpyUpdaterDialog
 
+        # Remember currently connected wireless devices to restore after ADB restart
+        self._pre_update_wireless_serials = [
+            s for s, d in self.devices.items() if (":" in s or getattr(d, "is_wireless", False))
+        ]
+
         dlg = ScrcpyUpdaterDialog(self.config, self)
         dlg.scrcpy_updated.connect(self._on_scrcpy_updated)
         dlg.exec()
@@ -1356,12 +1368,40 @@ class MainWindow(QMainWindow):
         bin_dir = self.config.get_scrcpy_bin_dir()
         self.adb = AdbManager(bin_dir)
         self.process_manager.scrcpy_dir = bin_dir
-        self.process_manager.scrcpy_bin = bin_dir / "scrcpy.exe"
+        self.process_manager.scrcpy_bin = str(bin_dir / "scrcpy.exe")
         self.process_manager.adb = self.adb
         self.icon_manager.adb_bin = str(bin_dir / "adb.exe")
+
+        # Propagate refreshed AdbManager to all child components
+        if hasattr(self, "favorites_bar"):
+            self.favorites_bar.adb = self.adb
+        if hasattr(self, "quick_actions"):
+            self.quick_actions.adb = self.adb
+        if hasattr(self, "drop_zone"):
+            self.drop_zone.adb = self.adb
+        if hasattr(self, "app_launcher"):
+            self.app_launcher.adb = self.adb
+        if hasattr(self, "command_injector"):
+            self.command_injector.adb = self.adb
+
         self._append_log("Updater", f"Scrcpy runtime successfully deployed ({new_version})!")
         self._start_scanner()
-        self._manual_refresh()
+
+        # Restore wireless connections severed when ADB daemon was killed during update
+        to_reconnect = list(getattr(self, "_pre_update_wireless_serials", []))
+        for p in self.config.get_pinned_devices():
+            s = p.get("serial", "")
+            if s and (":" in s or p.get("is_wireless", False)) and s not in to_reconnect:
+                to_reconnect.append(s)
+
+        if to_reconnect:
+            self._append_log("System", f"Auto-reconnecting {len(to_reconnect)} wireless device(s) after Scrcpy update...")
+            self._reconnect_worker = AutoReconnectWorker(self.adb, to_reconnect, self)
+            self._reconnect_worker.finished_reconnect.connect(self._manual_refresh)
+            self._reconnect_worker.finished.connect(self._reconnect_worker.deleteLater)
+            self._reconnect_worker.start()
+        else:
+            self._manual_refresh()
 
     def _on_tray_activated(self, reason):
         if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):

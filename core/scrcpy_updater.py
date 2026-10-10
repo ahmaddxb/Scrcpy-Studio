@@ -142,7 +142,7 @@ class ScrcpyDownloadWorker(QThread):
                         self.progress_updated.emit(downloaded, total_size, status)
 
             # Extraction & Deployment
-            self.step_changed.emit("Terminating running ADB server...")
+            self.step_changed.emit("Terminating running Scrcpy and ADB processes...")
             self._kill_adb()
 
             self.step_changed.emit("Extracting Scrcpy binaries...")
@@ -187,7 +187,7 @@ class ScrcpyDownloadWorker(QThread):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     def _kill_adb(self):
-        """Safely kill any active adb.exe daemon locking binary files."""
+        """Safely kill any active scrcpy.exe and adb.exe processes locking binary files."""
         try:
             adb_exe = self.target_dir / "adb.exe"
             if adb_exe.exists():
@@ -208,6 +208,13 @@ class ScrcpyDownloadWorker(QThread):
                 )
             if os.name == "nt":
                 subprocess.run(
+                    ["taskkill", "/F", "/IM", "scrcpy.exe"],
+                    stdin=subprocess.DEVNULL,
+                    capture_output=True,
+                    timeout=3,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
+                subprocess.run(
                     ["taskkill", "/F", "/IM", "adb.exe"],
                     stdin=subprocess.DEVNULL,
                     capture_output=True,
@@ -216,3 +223,4 @@ class ScrcpyDownloadWorker(QThread):
                 )
         except Exception:
             pass
+

@@ -230,7 +230,13 @@ class ScrcpyUpdaterDialog(QDialog):
         self.btn_check.setEnabled(False)
         self.btn_action.setEnabled(False)
         self.btn_close.setEnabled(False)
-        self.progress_bar.setValue(0)
+        # Safely terminate any active mirror sessions before updating binaries
+        parent_mw = self.parent()
+        if parent_mw and hasattr(parent_mw, "process_manager"):
+            try:
+                parent_mw.process_manager.stop_all()
+            except Exception:
+                pass
 
         target_dir = self.config.get_scrcpy_bin_dir()
         self.downloader = ScrcpyDownloadWorker(download_url, target_dir, self)
