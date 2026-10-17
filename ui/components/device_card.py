@@ -25,6 +25,8 @@ class DeviceCard(QFrame):
     connect_requested = Signal(str)  # serial (for offline pinned devices)
     pin_toggled = Signal(str, bool)  # serial, is_pinned
     profile_requested = Signal(str)  # serial
+    move_up_requested = Signal(str)  # serial
+    move_down_requested = Signal(str)  # serial
 
     def __init__(
         self,
@@ -43,6 +45,8 @@ class DeviceCard(QFrame):
         self.is_running = is_running
         self.is_pinned = is_pinned
         self.is_offline = is_offline
+        self._can_move_up = False
+        self._can_move_down = False
 
         self.setObjectName("deviceCard")
         self.setCursor(Qt.PointingHandCursor)
@@ -68,6 +72,29 @@ class DeviceCard(QFrame):
         self.name_label = QLabel(self.alias)
         self.name_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #FFFFFF;")
         top_row.addWidget(self.name_label, 1)
+
+        # Move Up / Down Reorder buttons
+        self.btn_move_up = QPushButton("▲")
+        self.btn_move_up.setFixedSize(22, 22)
+        self.btn_move_up.setToolTip("Move device up in list")
+        self.btn_move_up.setStyleSheet(
+            "QPushButton { background: transparent; color: #64748B; border: 1px solid #282C37; border-radius: 4px; font-size: 8px; font-weight: bold; padding: 0px; }"
+            "QPushButton:hover { color: #38BDF8; border-color: #38BDF8; background: #38BDF811; }"
+            "QPushButton:disabled { color: #232734; border-color: #1A1D26; background: transparent; }"
+        )
+        self.btn_move_up.clicked.connect(lambda: self.move_up_requested.emit(self.device.serial))
+        top_row.addWidget(self.btn_move_up)
+
+        self.btn_move_down = QPushButton("▼")
+        self.btn_move_down.setFixedSize(22, 22)
+        self.btn_move_down.setToolTip("Move device down in list")
+        self.btn_move_down.setStyleSheet(
+            "QPushButton { background: transparent; color: #64748B; border: 1px solid #282C37; border-radius: 4px; font-size: 8px; font-weight: bold; padding: 0px; }"
+            "QPushButton:hover { color: #38BDF8; border-color: #38BDF8; background: #38BDF811; }"
+            "QPushButton:disabled { color: #232734; border-color: #1A1D26; background: transparent; }"
+        )
+        self.btn_move_down.clicked.connect(lambda: self.move_down_requested.emit(self.device.serial))
+        top_row.addWidget(self.btn_move_down)
 
         # Device Profile / Settings Override button
         self.btn_profile = QPushButton("⚙️")
@@ -219,7 +246,17 @@ class DeviceCard(QFrame):
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
-        
+
+        act_up = menu.addAction("⬆️ Move Up in List")
+        act_up.setEnabled(getattr(self, "_can_move_up", False))
+        act_up.triggered.connect(lambda: self.move_up_requested.emit(self.device.serial))
+
+        act_down = menu.addAction("⬇️ Move Down in List")
+        act_down.setEnabled(getattr(self, "_can_move_down", False))
+        act_down.triggered.connect(lambda: self.move_down_requested.emit(self.device.serial))
+
+        menu.addSeparator()
+
         act_profile = menu.addAction("⚙️ Device Profile & Custom Settings...")
         act_profile.triggered.connect(lambda: self.profile_requested.emit(self.device.serial))
 
@@ -245,6 +282,15 @@ class DeviceCard(QFrame):
     def set_active(self, active: bool):
         self.is_active = active
         self.update_state(self.is_active, self.is_running, self.is_pinned, self.is_offline)
+
+    def set_reorder_enabled(self, can_move_up: bool, can_move_down: bool):
+        """Enable or disable move up/down controls depending on list position."""
+        self._can_move_up = can_move_up
+        self._can_move_down = can_move_down
+        if hasattr(self, "btn_move_up"):
+            self.btn_move_up.setEnabled(can_move_up)
+        if hasattr(self, "btn_move_down"):
+            self.btn_move_down.setEnabled(can_move_down)
 
     def set_running(self, running: bool):
         self.is_running = running

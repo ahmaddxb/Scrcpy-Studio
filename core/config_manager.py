@@ -28,6 +28,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "last_selected_serial": "",
     "recent_wireless_ips": [],
     "pinned_devices": [],
+    "device_order": [],
+    "main_window_width": 1380,
+    "main_window_height": 880,
+    "main_window_maximized": False,
     "close_to_tray": True,
     "start_minimized": False,
     "enable_companion_toolbar": True,
@@ -264,6 +268,29 @@ class ConfigManager:
             p.get("serial") == serial or (hardware_serial and p.get("hardware_serial") == hardware_serial)
             for p in self.get_pinned_devices()
         )
+
+    # === DEVICE ORDERING ===
+
+    def get_device_order(self) -> List[str]:
+        """Return user-configured order of device identifiers (hardware serials or serials)."""
+        return list(self.data.get("device_order", []))
+
+    def set_device_order(self, order: List[str]) -> None:
+        """Persist user-configured order of device identifiers and sync pinned_devices relative ordering."""
+        self.data["device_order"] = list(order)
+        pinned = self.get_pinned_devices()
+        if pinned:
+            def sort_key(p):
+                hw = p.get("hardware_serial", "")
+                s = p.get("serial", "")
+                if hw and hw in order:
+                    return order.index(hw)
+                if s and s in order:
+                    return order.index(s)
+                return 9999
+            pinned.sort(key=sort_key)
+            self.data["pinned_devices"] = pinned
+        self.save()
 
     # === GLOBAL SHORTCUTS ===
 

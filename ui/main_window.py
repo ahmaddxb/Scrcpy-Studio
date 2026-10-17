@@ -94,8 +94,30 @@ class MainWindow(QMainWindow):
         self.pending_app_transfers: Dict[str, Tuple[str, str, str]] = {}
 
         self.setWindowTitle(f"Scrcpy Studio {APP_VERSION} — Android Control & Mirroring")
-        self.resize(1220, 820)
         self.setMinimumSize(960, 640)
+
+        # Responsive larger default size & load remembered window size
+        screen = QApplication.primaryScreen()
+        avail = screen.availableGeometry() if screen else None
+        max_avail_w = (avail.width() - 40) if avail else 1920
+        max_avail_h = (avail.height() - 60) if avail else 1080
+
+        default_w = min(1380, max(960, max_avail_w))
+        default_h = min(880, max(640, max_avail_h))
+
+        saved_w = self.config.get("main_window_width", default_w)
+        saved_h = self.config.get("main_window_height", default_h)
+        saved_max = self.config.get("main_window_maximized", False)
+
+        target_w = max(960, min(saved_w, max_avail_w if avail else saved_w))
+        target_h = max(640, min(saved_h, max_avail_h if avail else saved_h))
+
+        self.resize(target_w, target_h)
+        self._last_normal_width = target_w
+        self._last_normal_height = target_h
+
+        if saved_max:
+            self.showMaximized()
 
         self._setup_ui()
         self._update_header_runtime_status()
@@ -249,7 +271,7 @@ class MainWindow(QMainWindow):
         self.device_scroll = QScrollArea()
         self.device_scroll.setWidgetResizable(True)
         self.device_scroll.setMinimumHeight(200)
-        self.device_scroll.setMaximumHeight(360)
+        self.device_scroll.setMaximumHeight(520)
 
         self.device_container = QWidget()
         self.device_list_layout = QVBoxLayout(self.device_container)
@@ -735,7 +757,53 @@ class MainWindow(QMainWindow):
         card.connect_requested.connect(self._on_reconnect_pinned_device)
         card.pin_toggled.connect(self._on_pin_toggled)
         card.profile_requested.connect(self._open_device_profile_dialog)
+        card.move_up_requested.connect(self._on_move_device_up)
+        card.move_down_requested.connect(self._on_move_device_down)
         return card
+
+    def _on_move_device_up(self, serial: str):
+        self._reorder_device(serial, direction=-1)
+
+    def _on_move_device_down(self, serial: str):
+        self._reorder_device(serial, direction=1)
+
+    def _reorder_device(self, serial: str, direction: int):
+        if not hasattr(self, "_ordered_serials") or serial not in self._ordered_serials:
+            return
+        idx = self._ordered_serials.index(serial)
+        target_idx = idx + direction
+        if 0 <= target_idx < len(self._ordered_serials):
+            # Swap in memory list
+            self._ordered_serials[idx], self._ordered_serials[target_idx] = (
+                self._ordered_serials[target_idx],
+                self._ordered_serials[idx],
+            )
+            # Re-position cards in the layout and update button states
+            for i, s in enumerate(self._ordered_serials):
+                c = self.card_widgets.get(s)
+                if c:
+                    self.device_list_layout.insertWidget(i, c)
+                    c.set_reorder_enabled(
+                        can_move_up=(i > 0),
+                        can_move_down=(i < len(self._ordered_serials) - 1),
+                    )
+
+            # Persist order using hardware serials (or serials as fallback)
+            persisted_order = []
+            for s in self._ordered_serials:
+                dev = self.devices.get(s)
+                hw = getattr(dev, "hardware_serial", "")
+                if not hw:
+                    for p in self.config.get_pinned_devices():
+                        if p.get("serial") == s and p.get("hardware_serial"):
+                            hw = p.get("hardware_serial")
+                            break
+                persisted_order.append(hw or s)
+
+            self.config.set_device_order(persisted_order)
+            alias = self.config.get_device_alias(serial)
+            dir_str = "up" if direction < 0 else "down"
+            self._append_log("System", f"Rearranged devices: moved '{alias}' {dir_str}")
 
     def _on_devices_updated(self, device_list: List[AdbDevice]):
         self.devices = {d.serial: d for d in device_list}
@@ -751,6 +819,7 @@ class MainWindow(QMainWindow):
                 card.setParent(None)
                 card.deleteLater()
             self.card_widgets.clear()
+            self._ordered_serials = []
             self.empty_state_widget.setVisible(True)
             self.selected_serial = None
             self.quick_actions.set_device(None)
@@ -774,6 +843,10 @@ class MainWindow(QMainWindow):
 
         rendered_serials = set()
         valid_serials = set(self.devices.keys()) | set(pinned_map.keys())
+
+        # Determine all candidate devices to display
+        # List of tuples: (serial, AdbDevice, alias, is_active, is_running, is_pinned, is_offline)
+        candidates = []
 
         # 1. Update existing or render new currently connected devices
         for dev in device_list:
@@ -801,27 +874,7 @@ class MainWindow(QMainWindow):
                         connection_type=dev.connection_type,
                         hardware_serial=dev.hardware_serial
                     )
-
-            if dev.serial in self.card_widgets:
-                self.card_widgets[dev.serial].update_device(
-                    dev,
-                    alias=alias,
-                    is_active=is_active,
-                    is_running=is_running,
-                    is_pinned=is_pinned,
-                    is_offline=False
-                )
-            else:
-                card = self._create_device_card(
-                    dev,
-                    alias=alias,
-                    is_active=is_active,
-                    is_running=is_running,
-                    is_pinned=is_pinned,
-                    is_offline=False
-                )
-                self.device_list_layout.addWidget(card)
-                self.card_widgets[dev.serial] = card
+            candidates.append((dev.serial, dev, alias, is_active, is_running, is_pinned, False))
 
         # 2. Update existing or render pinned devices that are currently offline / disconnected
         for serial, pinfo in pinned_map.items():
@@ -838,28 +891,53 @@ class MainWindow(QMainWindow):
                     connection_type=conn_type,
                     hardware_serial=hw_s
                 )
-                if serial in self.card_widgets:
-                    self.card_widgets[serial].update_device(
-                        offline_dev,
-                        alias=alias,
-                        is_active=False,
-                        is_running=False,
-                        is_pinned=True,
-                        is_offline=True
-                    )
-                else:
-                    card = self._create_device_card(
-                        offline_dev,
-                        alias=alias,
-                        is_active=False,
-                        is_running=False,
-                        is_pinned=True,
-                        is_offline=True
-                    )
-                    self.device_list_layout.addWidget(card)
-                    self.card_widgets[serial] = card
+                candidates.append((serial, offline_dev, alias, False, False, True, True))
 
-        # 3. Clean up stale cards
+        # Sort candidates according to stored device_order
+        device_order = self.config.get_device_order()
+        def get_sort_key(item):
+            s, d, _, _, _, _, _ = item
+            hw = getattr(d, "hardware_serial", "")
+            if hw and hw in device_order:
+                return device_order.index(hw)
+            if s in device_order:
+                return device_order.index(s)
+            return 9999
+
+        candidates.sort(key=get_sort_key)
+        self._ordered_serials = [c[0] for c in candidates]
+
+        # Render or update cards in sorted order
+        for idx, (serial, dev, alias, is_active, is_running, is_pinned, is_offline) in enumerate(candidates):
+            if serial in self.card_widgets:
+                card = self.card_widgets[serial]
+                card.update_device(
+                    dev,
+                    alias=alias,
+                    is_active=is_active,
+                    is_running=is_running,
+                    is_pinned=is_pinned,
+                    is_offline=is_offline
+                )
+            else:
+                card = self._create_device_card(
+                    dev,
+                    alias=alias,
+                    is_active=is_active,
+                    is_running=is_running,
+                    is_pinned=is_pinned,
+                    is_offline=is_offline
+                )
+                self.card_widgets[serial] = card
+
+            # Position in layout and update reorder controls
+            self.device_list_layout.insertWidget(idx, card)
+            card.set_reorder_enabled(
+                can_move_up=(idx > 0),
+                can_move_down=(idx < len(candidates) - 1)
+            )
+
+        # Clean up stale cards
         for serial in list(self.card_widgets.keys()):
             if serial not in valid_serials:
                 card = self.card_widgets.pop(serial)
@@ -1420,8 +1498,30 @@ class MainWindow(QMainWindow):
             self.scanner.interval_ms = interval_ms
             self._append_log("System", f"Device scan interval updated to {interval_ms} ms")
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not self.isMaximized() and not self.isMinimized() and self.isVisible():
+            self._last_normal_width = self.width()
+            self._last_normal_height = self.height()
+
+    def _save_window_geometry(self):
+        try:
+            is_max = self.isMaximized()
+            self.config.set("main_window_maximized", is_max)
+            w = getattr(self, "_last_normal_width", None) or self.width()
+            h = getattr(self, "_last_normal_height", None) or self.height()
+            if not is_max:
+                w = self.width()
+                h = self.height()
+            if w >= 960 and h >= 640:
+                self.config.set("main_window_width", w)
+                self.config.set("main_window_height", h)
+        except Exception:
+            pass
+
     def _force_quit(self):
         self._append_log("System", "Quitting Scrcpy Studio...")
+        self._save_window_geometry()
         if hasattr(self, "hotkey_manager"):
             self.hotkey_manager.cleanup()
         self.tray_icon.hide()
@@ -1432,6 +1532,7 @@ class MainWindow(QMainWindow):
         QApplication.quit()
 
     def closeEvent(self, event):
+        self._save_window_geometry()
         close_to_tray = self.config.get("close_to_tray", True)
         if close_to_tray and self.tray_icon.isVisible():
             event.ignore()
