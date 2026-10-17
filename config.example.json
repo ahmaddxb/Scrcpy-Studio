@@ -4,6 +4,11 @@
     "auto_refresh_interval_ms": 2000,
     "last_selected_serial": "",
     "recent_wireless_ips": [],
+    "pinned_devices": [],
+    "device_order": [],
+    "main_window_width": 1380,
+    "main_window_height": 880,
+    "main_window_maximized": false,
     "active_preset": "Balanced (1080p 60fps 8M)",
     "presets": {
         "Balanced (1080p 60fps 8M)": {

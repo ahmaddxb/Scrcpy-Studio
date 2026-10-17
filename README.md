@@ -43,27 +43,38 @@
 * **Subnet & mDNS Network Scanner**: High-speed parallel Wi-Fi discovery across 254 subnet IPs in < 1.5 seconds.
 * **Persistent Pinned Devices**: Pin frequently used USB/Wi-Fi/LAN devices with configurable auto-reconnect on startup and permanent offline badge memory.
 
-### 🔔 7. Windows System Tray & Desktop Shortcuts
+### ↕️ 7. Dynamic Device Cards Ordering & Reordering
+* **In-Place Reordering Controls**: Move connected and pinned device cards up or down instantly using dedicated `▲` / `▼` header buttons or right-click context menu actions (`⬆️ Move Up in List`, `⬇️ Move Down in List`).
+* **Boundary-Aware State**: Quick reorder buttons dynamically enable and disable at the top and bottom of the device list.
+* **Permanent Hardware Serial Ordering**: Custom order is stored in `config.json` under `device_order` prioritizing permanent hardware serials (`ro.serialno`), ensuring devices retain their user-configured order across wireless IP and port changes.
+* **Automatic Pinned Synchronization**: Relative order of pinned devices automatically stays in lockstep with the custom device ordering.
+
+### 📐 8. Spacious Geometry & Window Size Memory
+* **Generous Default Dimensions**: Default launch size expanded from `1220×820` to `1380×880` with automatic screen boundary safety clamping for high-DPI scaling and compact laptop displays.
+* **Uncramped Device Scroll Area**: Maximum scroll height expanded from 360px to 520px, displaying up to 4 devices simultaneously with zero unnecessary vertical scrollbars.
+* **Window State Persistence**: Automatically records user-resized window width, height, and maximized state across sessions in `config.json` and restores them seamlessly upon restart.
+
+### 🔔 9. Windows System Tray & Desktop Shortcuts
 * **Taskbar System Tray (`QSystemTrayIcon`)**: Minimizes to tray on close/minimize with background execution.
 * **Simplified Tray Header & Quick Migration**: Displays clean device status (e.g. `📱 Samsung S25 Ultra`) with instant 1-click **`🔀 Move to PC (Active App)`** and screen mirroring.
 * **Tray Quick-Launch**: Right-click the system tray icon to 1-click launch favorite apps directly into standalone virtual display windows without opening the main window.
 * **1-Click Desktop Shortcuts (`.lnk`)**: Automatically converts app logos to `.ico` and creates desktop shortcuts on your Windows desktop.
 * **Silent Background Startup**: Configurable `Start minimized to System Tray` preference in Settings.
 
-### ⌨️ 8. System-Wide Global Hotkeys & In-App Shortcuts
+### ⌨️ 10. System-Wide Global Hotkeys & In-App Shortcuts
 * **Win32 Background Hotkeys**: Control your phone from anywhere with global shortcuts that work even when Scrcpy Studio is minimized to the system tray or gaming in another application:
   * <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>M</kbd>: **🚀 Mirror Phone Screen**
   * <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>: **🔀 Move to PC (Active App)**
   * <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd>: **🪟 Show / Focus Scrcpy Studio**
 * **Custom Keybinding Hub**: Record custom key combinations in **Settings** via interactive `QKeySequenceEdit` with real-time Win32 conflict detection and live tray menu hints.
 
-### 🔄 9. Dual Interactive Badges & Auto-Updaters
-* **Interactive Header Version Badges**: Clearly distinguishes between the **Scrcpy Studio Version** (`v1.0.11`) and the **Bundled Scrcpy Engine Version** (`Scrcpy v5.0`) with zero layout clutter. Badges dynamically transform into glowing update pills (`v1.0.10 ⬆ v1.0.11`, `Scrcpy v4.1 ⬆ v5.0`) when releases are available.
+### 🔄 11. Dual Interactive Badges & Auto-Updaters
+* **Interactive Header Version Badges**: Clearly distinguishes between the **Scrcpy Studio Version** (`v1.0.12`) and the **Bundled Scrcpy Engine Version** (`Scrcpy v5.0`) with zero layout clutter. Badges dynamically transform into glowing update pills (`v1.0.11 ⬆ v1.0.12`, `Scrcpy v4.1 ⬆ v5.0`) when releases are available.
 * **Scrcpy Studio Self-Updater**: Automatically checks the official Scrcpy Studio GitHub releases in the background, displays interactive header badges, and provides 1-click self-updating with changelog viewer.
 * **Scrcpy Binary Downloader**: Automatically checks for official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) 64-bit Windows releases and extracts runtime binaries directly to `scrcpy/` with zero manual setup.
 * **Zero-Restart Scrcpy Upgrades & Seamless Reconnection**: Releases Windows file locks during runtime binary replacement by terminating background processes, instantly snapshots and re-establishes severed wireless ADB TCP links post-deployment, and refreshes child widgets with 0 required app restarts.
 
-### 🔋 10. Screen Timeout Safety & Flicker-Free Architecture
+### 🔋 12. Screen Timeout Safety & Flicker-Free Architecture
 * **24-Hour Timeout Boost**: Automatically extends phone screen timeout during mirroring sessions to prevent unwanted sleep.
 * **Multi-Session Reference Counting**: Tracks all open virtual displays and safely restores your phone's original timeout when the last session closes.
 * **Flicker-Free Windows Subprocess Engine**: Uses `DETACHED_PROCESS` and asynchronous Qt worker threads to eliminate pseudo-console flashes and maintain 60 FPS smooth GUI performance.
