@@ -234,6 +234,7 @@ class QuickActionBar(QFrame):
         btn = QPushButton(text)
         btn.setProperty("class", "quickAction")
         btn.setCursor(Qt.PointingHandCursor)
+        btn.setFixedHeight(28)
         if icon and not icon.isNull():
             btn.setIcon(icon)
             btn.setIconSize(QSize(14, 14))

@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from PySide6.QtCore import QThread, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QThread, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -94,7 +94,7 @@ class MainWindow(QMainWindow):
         self.pending_app_transfers: Dict[str, Tuple[str, str, str]] = {}
 
         self.setWindowTitle(f"Scrcpy Studio {APP_VERSION} — Android Control & Mirroring")
-        self.setMinimumSize(960, 640)
+        self.setMinimumSize(1180, 720)
 
         # Responsive larger default size & load remembered window size
         screen = QApplication.primaryScreen()
@@ -102,15 +102,15 @@ class MainWindow(QMainWindow):
         max_avail_w = (avail.width() - 40) if avail else 1920
         max_avail_h = (avail.height() - 60) if avail else 1080
 
-        default_w = min(1380, max(960, max_avail_w))
-        default_h = min(880, max(640, max_avail_h))
+        default_w = min(1380, max(1180, max_avail_w))
+        default_h = min(880, max(720, max_avail_h))
 
         saved_w = self.config.get("main_window_width", default_w)
         saved_h = self.config.get("main_window_height", default_h)
         saved_max = self.config.get("main_window_maximized", False)
 
-        target_w = max(960, min(saved_w, max_avail_w if avail else saved_w))
-        target_h = max(640, min(saved_h, max_avail_h if avail else saved_h))
+        target_w = max(1180, min(saved_w, max_avail_w if avail else saved_w))
+        target_h = max(720, min(saved_h, max_avail_h if avail else saved_h))
 
         self.resize(target_w, target_h)
         self._last_normal_width = target_w
@@ -345,6 +345,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(right_container)
         splitter.setStretchFactor(0, 4)
         splitter.setStretchFactor(1, 6)
+        splitter.setSizes([480, 780])
 
         l_page_mirror.addWidget(splitter)
         self.main_stack.addWidget(page_mirror)
@@ -1488,8 +1489,44 @@ class MainWindow(QMainWindow):
             else:
                 self._restore_from_tray()
 
+    def _ensure_healthy_window_geometry(self):
+        """Guard against Windows DPMS sleep/display-disconnect resizing the window to squashed dimensions."""
+        if self.isMaximized():
+            return
+
+        screen = QApplication.primaryScreen()
+        avail = screen.availableGeometry() if screen else None
+        max_avail_w = (avail.width() - 40) if avail else 1920
+        max_avail_h = (avail.height() - 60) if avail else 1080
+
+        saved_w = self.config.get("main_window_width", 1380)
+        saved_h = self.config.get("main_window_height", 880)
+
+        # Target healthy dimensions
+        target_w = max(1180, min(saved_w, max_avail_w))
+        target_h = max(720, min(saved_h, max_avail_h))
+
+        if self.width() < 1180 or self.height() < 720:
+            self.resize(target_w, target_h)
+            self._last_normal_width = target_w
+            self._last_normal_height = target_h
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._ensure_healthy_window_geometry()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange:
+            if not self.isMinimized() and self.isVisible():
+                self._ensure_healthy_window_geometry()
+
     def _restore_from_tray(self):
-        self.showNormal()
+        if self.isMinimized():
+            self.showNormal()
+        else:
+            self.show()
+        self._ensure_healthy_window_geometry()
         self.activateWindow()
         self.raise_()
 
@@ -1500,9 +1537,11 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        # Only record user-chosen dimensions that are healthy, ignoring temporary sleep/DPMS collapsing
         if not self.isMaximized() and not self.isMinimized() and self.isVisible():
-            self._last_normal_width = self.width()
-            self._last_normal_height = self.height()
+            if self.width() >= 1180 and self.height() >= 720:
+                self._last_normal_width = self.width()
+                self._last_normal_height = self.height()
 
     def _save_window_geometry(self):
         try:
@@ -1513,7 +1552,7 @@ class MainWindow(QMainWindow):
             if not is_max:
                 w = self.width()
                 h = self.height()
-            if w >= 960 and h >= 640:
+            if w >= 1180 and h >= 720:
                 self.config.set("main_window_width", w)
                 self.config.set("main_window_height", h)
         except Exception:
